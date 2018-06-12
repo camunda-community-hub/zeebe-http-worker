@@ -59,8 +59,9 @@ func handleJob(client zbsubscribe.ZeebeAPI, event *zbsubscriptions.SubscriptionE
 
 	url := getParameter(job, "url")
 	if url == nil {
-		// TODO handle error
 		fmt.Println("Missing required parameter 'URL'")
+		job.Retries--
+		client.FailJob(event)
 		return
 	}
 
@@ -74,8 +75,9 @@ func handleJob(client zbsubscribe.ZeebeAPI, event *zbsubscriptions.SubscriptionE
 	if body != nil {
 		jsonDocument, err := json.Marshal(body)
 		if err != nil {
-			// TODO handle error
 			fmt.Println(err)
+			job.Retries--
+			client.FailJob(event)
 			return
 		}
 		reqBody = bytes.NewReader(jsonDocument)
@@ -83,8 +85,9 @@ func handleJob(client zbsubscribe.ZeebeAPI, event *zbsubscriptions.SubscriptionE
 
 	statusCode, resBody, err := request(url.(string), method.(string), reqBody)
 	if err != nil {
-		// TODO handle error
 		fmt.Println(err)
+		job.Retries--
+		client.FailJob(event)
 		return
 	}
 
@@ -102,10 +105,8 @@ func getParameter(job *zbmsgpack.Job, param string) interface{} {
 		return value
 	}
 
-	p, _ := job.GetPayload()
-	payload := *p
-
-	value = payload[param]
+	payload, _ := job.GetPayload()
+	value = (*payload)[param]
 	return value
 }
 

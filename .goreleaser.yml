@@ -1,0 +1,36 @@
+project_name: zeebe-http-extension
+release:
+    github:
+        owner: zeebe-io
+        name: zeebe-http-extension
+    draft: false
+builds:
+    -
+        goos:
+            - linux
+            - darwin
+            - windows
+        goarch:
+            - amd64
+            - 386
+        ignore:
+            - goos: darwin
+              goarch: 386
+        main: ./main.go
+        binary: zeebe-http
+archive:
+    format: tar.gz
+    name_template: 'zeebe-http-{{ .Version }}-{{ .Os }}_{{ .Arch }}'
+    replacements:
+        darwin: Darwin
+        linux: Linux
+        windows: Windows
+        amd64: x86_64
+        386: i386
+    format_overrides:
+        - goos: windows
+          format: zip
+snapshot:
+    name_template: SNAPSHOT-{{ .Commit }}
+checksum:
+    name_template: 'zeebe-http-{{ .Version }}_checksums.txt'
