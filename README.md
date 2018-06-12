@@ -11,8 +11,8 @@ _This is a community project meant for playing around with Zeebe. It is not offi
 
 ## Example
 HTTP GET request:
-```
-<bpmn:serviceTask id="httpCall" name="Get posts"
+```xml
+<bpmn:serviceTask id="httpCall" name="Get posts">
   <bpmn:extensionElements>
     <zeebe:taskDefinition type="http" />
     <zeebe:taskHeaders>
@@ -23,7 +23,7 @@ HTTP GET request:
 ```
 
 Result is:
-```
+```json
 {
   "statusCode": 200,
   "body": [
@@ -32,13 +32,12 @@ Result is:
       "id": 1,
       "title": "sunt aut facere repellat provident occaecati excepturi optio reprehenderit",
       "body": "quia et suscipit\nsuscipit recusandae consequuntur expedita et cum\nreprehenderit molestiae ut ut quas totam\nnostrum rerum est autem sunt rem eveniet architecto"
-    },
-    ...
+    }]
 }
 ```
 
 HTTP POST request:
-```
+```xml
 <bpmn:serviceTask id="httpCall" name="New post"
   <bpmn:extensionElements>
     <zeebe:taskDefinition type="http" />
@@ -51,7 +50,7 @@ HTTP POST request:
 ```
 
 with Payload:
-```
+```json
 {
   "body": {
       "userId": 99,
