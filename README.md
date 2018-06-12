@@ -43,7 +43,7 @@ HTTP POST request:
     <zeebe:taskDefinition type="http" />
     <zeebe:taskHeaders>
       <zeebe:header key="url" value="https://jsonplaceholder.typicode.com/posts/" />
-      <zeebe:header key="method" value="https://jsonplaceholder.typicode.com/posts/" />
+      <zeebe:header key="method" value="POST" />
     </zeebe:taskHeaders>
   </bpmn:extensionElements>
 </bpmn:serviceTask>
