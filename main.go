@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/zeebe-io/zeebe/clients/go/entities"
+	"github.com/zeebe-io/zeebe/clients/go/worker"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -11,73 +13,59 @@ import (
 	"os/signal"
 	"strings"
 
-	"github.com/zeebe-io/zbc-go/zbc"
-	"github.com/zeebe-io/zbc-go/zbc/models/zbmsgpack"
-	"github.com/zeebe-io/zbc-go/zbc/models/zbsubscriptions"
-	"github.com/zeebe-io/zbc-go/zbc/services/zbsubscribe"
+	"github.com/zeebe-io/zeebe/clients/go/zbc"
 )
 
 func main() {
 	brokerAddr := os.Getenv("BROKER")
 	if brokerAddr == "" {
-		brokerAddr = "0.0.0.0:51015"
+		brokerAddr = "0.0.0.0:26500"
 	}
 
-	topicName := os.Getenv("TOPIC")
-	if topicName == "" {
-		topicName = "default-topic"
-	}
-
-	zbClient, err := zbc.NewClient(brokerAddr)
+	zbClient, err := zbc.NewZBClient(brokerAddr)
 	if err != nil {
 		panic("Failed to connect to " + brokerAddr)
 	}
 
-	subscription, err := zbClient.JobSubscription(topicName, "http-go", "http", 1000, 32, handleJob)
-	if err != nil {
-		panic("Unable to open subscription")
-	}
+	jobWorker := zbClient.NewJobWorker().JobType("http").Handler(handleJob).Name("http-go").BufferSize(32).Open()
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 	go func() {
 		<-c
-		err := subscription.Close()
-		if err != nil {
-			panic("Failed to close subscription")
-		}
-
-		fmt.Println("Closed subscription")
+		fmt.Println("Closing job worker")
+		jobWorker.Close()
+		jobWorker.AwaitClose()
+		fmt.Println("Closed job worker")
 		os.Exit(0)
 	}()
 
-	subscription.Start()
+	jobWorker.AwaitClose()
 }
 
-func handleJob(client zbsubscribe.ZeebeAPI, event *zbsubscriptions.SubscriptionEvent) {
-	job, _ := event.GetJob()
-
-	url := getParameter(job, "url")
-	if url == nil {
-		fmt.Println("Missing required parameter 'URL'")
-		job.Retries--
-		client.FailJob(event)
+func handleJob(client worker.JobClient, job entities.Job) {
+	url, err := getParameter(job, "url")
+	if err != nil {
+		failJob(client, job, fmt.Sprintf("Failed to recieve required parameter 'url'", err))
 		return
 	}
 
-	method := getParameter(job, "method")
-	if method == nil {
+	if url == nil {
+		failJob(client, job, "Missing required parameter 'url'")
+		return
+	}
+
+	method, err := getParameter(job, "method")
+	if err != nil || method == nil {
 		method = "GET"
 	}
 
 	var reqBody io.Reader
-	body := getParameter(job, "body")
+	body, _ := getParameter(job, "body")
 	if body != nil {
 		jsonDocument, err := json.Marshal(body)
 		if err != nil {
-			fmt.Println(err)
-			job.Retries--
-			client.FailJob(event)
+			failJob(client, job, fmt.Sprintf("Failed to marshal body parameter 'body' as json", err))
 			return
 		}
 		reqBody = bytes.NewReader(jsonDocument)
@@ -85,9 +73,7 @@ func handleJob(client zbsubscribe.ZeebeAPI, event *zbsubscriptions.SubscriptionE
 
 	statusCode, resBody, err := request(url.(string), method.(string), reqBody)
 	if err != nil {
-		fmt.Println(err)
-		job.Retries--
-		client.FailJob(event)
+		failJob(client, job, fmt.Sprintf("Failed to send request to url", url, err))
 		return
 	}
 
@@ -95,19 +81,33 @@ func handleJob(client zbsubscribe.ZeebeAPI, event *zbsubscriptions.SubscriptionE
 	result["statusCode"] = statusCode
 	result["body"] = resBody
 
-	job.SetPayload(result)
-	client.CompleteJob(event)
-}
-
-func getParameter(job *zbmsgpack.Job, param string) interface{} {
-	value := job.CustomHeader[param]
-	if value != nil {
-		return value
+	cmd, err := client.NewCompleteJobCommand().JobKey(job.Key).PayloadFromMap(result)
+	if err != nil {
+		failJob(client, job, fmt.Sprintf("Failed to set payload for complete job command", err))
+		return
 	}
 
-	payload, _ := job.GetPayload()
-	value = (*payload)[param]
-	return value
+	cmd.Send()
+	fmt.Println("Completed job with key", job.Key)
+}
+
+func getParameter(job entities.Job, param string) (interface{}, error) {
+	headers, err := job.GetCustomHeadersAsMap()
+	if err != nil {
+		return nil, err
+	}
+
+	value := headers[param]
+	if value != nil {
+		return value, nil
+	}
+
+	payload, err := job.GetPayloadAsMap()
+	if err != nil {
+		return nil, err
+	}
+
+	return payload[param], nil
 }
 
 func request(url string, method string, body io.Reader) (int, interface{}, error) {
@@ -149,4 +149,9 @@ func hasContentType(res http.Response, cType string) bool {
 		}
 	}
 	return false
+}
+
+func failJob(client worker.JobClient, job entities.Job, error string) {
+	fmt.Println("Failed to complete job", job.Key, ":", error)
+	client.NewFailJobCommand().JobKey(job.Key).Retries(job.Retries - 1).ErrorMessage(error).Send()
 }
