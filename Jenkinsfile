@@ -23,11 +23,6 @@ spec:
       image: maven:3.6.0-jdk-11
       command: ["cat"]
       tty: true
-      env:
-        - name: JAVA_TOOL_OPTIONS
-          value: |
-            -XX:+UnlockExperimentalVMOptions
-            -XX:+UseCGroupMemoryLimitForHeap
       resources:
         limits:
           cpu: 1
