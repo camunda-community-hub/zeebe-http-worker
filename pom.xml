@@ -1,0 +1,170 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+    <name>Zeebe HTTP Worker</name>
+    <groupId>io.zeebe</groupId>
+    <artifactId>zeebe-http-worker</artifactId>
+    <version>0.2.0-SNAPSHOT</version>
+    <packaging>jar</packaging>
+
+    <parent>
+        <groupId>org.camunda</groupId>
+        <artifactId>camunda-release-parent</artifactId>
+        <version>2.5</version>
+        <!-- do not remove empty tag - http://jira.codehaus.org/browse/MNG-4687 -->
+        <relativePath/>
+    </parent>
+
+    <properties>
+        <version.zeebe>0.19.0</version.zeebe>
+
+        <!-- release parent settings -->
+        <version.java>11</version.java>
+        <nexus.snapshot.repository>https://app.camunda.com/nexus/content/repositories/zeebe-io-snapshots/
+        </nexus.snapshot.repository>
+        <nexus.release.repository>https://app.camunda.com/nexus/content/repositories/zeebe-io/
+        </nexus.release.repository>
+
+        <!-- disable jdk8 javadoc checks on release build -->
+        <additionalparam>-Xdoclint:none</additionalparam>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>io.zeebe</groupId>
+                <artifactId>zeebe-bom</artifactId>
+                <version>${version.zeebe}</version>
+                <scope>import</scope>
+                <type>pom</type>
+            </dependency>
+            <dependency>
+                <groupId>io.netty</groupId>
+                <artifactId>netty-bom</artifactId>
+                <version>4.1.37.Final</version>
+                <scope>import</scope>
+                <type>pom</type>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+
+        <dependency>
+            <groupId>io.zeebe</groupId>
+            <artifactId>zeebe-client-java</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-core</artifactId>
+            <version>2.9.9</version>
+        </dependency>
+
+        <!-- logging -->
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-core</artifactId>
+            <version>2.11.1</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-slf4j-impl</artifactId>
+            <version>2.11.1</version>
+        </dependency>
+
+        <!-- test -->
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <scope>test</scope>
+            <version>4.12</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <version>3.10.0</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>io.zeebe</groupId>
+            <artifactId>zeebe-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <artifactId>maven-assembly-plugin</artifactId>
+                <configuration>
+                    <descriptorRefs>
+                        <descriptorRef>jar-with-dependencies</descriptorRef>
+                    </descriptorRefs>
+                    <archive>
+                        <manifest>
+                            <mainClass>io.zeebe.http.ZeebeHttpWorkerApplication</mainClass>
+                        </manifest>
+                    </archive>
+                    <finalName>${project.artifactId}-${project.version}</finalName>
+                    <appendAssemblyId>false</appendAssemblyId>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>make-assembly</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>single</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <configuration>
+                    <!-- Override java source version to workaround javadoc bug https://bugs.openjdk.java.net/browse/JDK-8212233 -->
+                    <source>8</source>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+    <repositories>
+        <repository>
+            <id>zeebe</id>
+            <name>Zeebe Repository</name>
+            <url>https://app.camunda.com/nexus/content/repositories/zeebe-io/</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+
+        <repository>
+            <id>zeebe-snapshots</id>
+            <name>Zeebe Snapshot Repository</name>
+            <url>https://app.camunda.com/nexus/content/repositories/zeebe-io-snapshots/</url>
+            <releases>
+                <enabled>false</enabled>
+            </releases>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+        </repository>
+    </repositories>
+
+    <scm>
+        <url>https://github.com/zeebe-io/zeebe-script-worker</url>
+        <connection>scm:git:git@github.com:zeebe-io/zeebe-script-worker.git</connection>
+        <developerConnection>scm:git:git@github.com:zeebe-io/zeebe-script-worker.git</developerConnection>
+        <tag>HEAD</tag>
+    </scm>
+
+</project>

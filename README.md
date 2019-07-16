@@ -1,70 +1,55 @@
-# Zeebe HTTP extension
-This is a Zeebe worker to make HTTP calls (e.g. invoke a REST service).
-The worker based on the [Zeebe Go client](https://github.com/zeebe-io/zbc-go).  
+# zeebe-http-worker
 
-* the worker is registered for the type 'http'
-* required parameter: 'url' as custom header or payload
-* optional parameters: 'method' (e.g. "GET", "POST"), 'body' (as JSON)
-* output payload contains 'statusCode' and 'body'  
+A Zeebe worker to make HTTP calls (e.g. invoking a REST service). It is based on the built-in Java HttpClient.
 
-_This is a community project meant for playing around with Zeebe. It is not officially supported by the Zeebe Team (i.e. no gurantees). Everybody is invited to contribute!_
+> Requirements: Java 11
 
-## Example
-HTTP GET request:
+## Usage
+
+Example BPMN with service task:
+
 ```xml
-<bpmn:serviceTask id="httpCall" name="Get posts">
+<bpmn:serviceTask id="http-get" name="stargazers check">
   <bpmn:extensionElements>
     <zeebe:taskDefinition type="http" />
     <zeebe:taskHeaders>
-      <zeebe:header key="url" value="https://jsonplaceholder.typicode.com/posts/" />
+      <zeebe:header key="url" value="https://api.github.com/user/starred/zeebe-io/zeebe-http-worker" />
     </zeebe:taskHeaders>
   </bpmn:extensionElements>
 </bpmn:serviceTask>
 ```
 
-Result is:
-```json
-{
-  "statusCode": 200,
-  "body": [
-    {
-      "userId": 1,
-      "id": 1,
-      "title": "sunt aut facere repellat provident occaecati excepturi optio reprehenderit",
-      "body": "quia et suscipit\nsuscipit recusandae consequuntur expedita et cum"
-    }]
-}
-```
+* the worker is registered for the type `http`
+* required custom headers/variable:
+  * `url` - the url to invoke
+* optional custom headers:
+  * `method` - the HTTP method to use (default: `GET`)
+* optional variables:
+  * `body` - the request body as JSON
+  * `authorization` - the value of the authorization header (e.g. `token 6bac4..`)
+* jobs are completed with variables:
+  * `statusCode` - the response status code
+  * `body` - the response body, if present
 
-HTTP POST request:
-```xml
-<bpmn:serviceTask id="httpCall" name="New post">
-  <bpmn:extensionElements>
-    <zeebe:taskDefinition type="http" />
-    <zeebe:taskHeaders>
-      <zeebe:header key="url" value="https://jsonplaceholder.typicode.com/posts/" />
-      <zeebe:header key="method" value="POST" />
-    </zeebe:taskHeaders>
-  </bpmn:extensionElements>
-</bpmn:serviceTask>
-```
 
-with Payload:
-```json
-{
-  "body": {
-      "userId": 99,
-      "title": "foo",
-      "body": "bar"
-    }
-}
-```
+## Install
 
-## Configuration
-The worker can be configured via environment variables.
+1) Download the [JAR file](https://github.com/zeebe-io/zeebe-http-worker/releases) 
 
-* BROKER = the connection string (default: "0.0.0.0:51015")
-* TOPIC = the topic to subscribe to (default: "default-topic")  
+2) Execute the JAR via
+
+    `java -jar target/zeebe-http-worker-{VERSION}.jar`
+
+### Configuration
+
+The connection can be changed by setting the environment variables:
+* `zeebe.client.broker.contactPoint` (default: `127.0.0.1:26500`).
+
+## Build from Source
+
+Build with Maven:
+    
+`mvn clean install`
 
 ## Code of Conduct
 
