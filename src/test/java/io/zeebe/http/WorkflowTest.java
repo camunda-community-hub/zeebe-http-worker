@@ -63,8 +63,8 @@ public class WorkflowTest {
 
     ZeebeTestRule.assertThat(workflowInstance)
         .isEnded()
-        .hasVariables("statusCode", 200)
-        .hasVariables("body", expectedResponse);
+        .hasVariable("statusCode", 200)
+        .hasVariable("body", expectedResponse);
   }
 
   @Test
@@ -94,8 +94,8 @@ public class WorkflowTest {
 
     ZeebeTestRule.assertThat(workflowInstance)
         .isEnded()
-        .hasVariables("statusCode", 201)
-        .hasVariables("body", expectedResponse);
+        .hasVariable("statusCode", 201)
+        .hasVariable("body", expectedResponse);
   }
 
   @Test
@@ -123,8 +123,8 @@ public class WorkflowTest {
 
     ZeebeTestRule.assertThat(workflowInstance)
         .isEnded()
-        .hasVariables("statusCode", 200)
-        .hasVariables("body", requestBody);
+        .hasVariable("statusCode", 200)
+        .hasVariable("body", requestBody);
   }
 
   @Test
@@ -144,7 +144,7 @@ public class WorkflowTest {
     final WorkflowInstanceEvent workflowInstance =
         deployAndCreateInstance(workflow, Collections.emptyMap());
 
-    ZeebeTestRule.assertThat(workflowInstance).isEnded().hasVariables("statusCode", 200);
+    ZeebeTestRule.assertThat(workflowInstance).isEnded().hasVariable("statusCode", 200);
   }
 
   @Test
@@ -164,7 +164,7 @@ public class WorkflowTest {
     final WorkflowInstanceEvent workflowInstance =
         deployAndCreateInstance(workflow, Collections.emptyMap());
 
-    ZeebeTestRule.assertThat(workflowInstance).isEnded().hasVariables("statusCode", 404);
+    ZeebeTestRule.assertThat(workflowInstance).isEnded().hasVariable("statusCode", 404);
   }
 
   @Test
@@ -198,7 +198,7 @@ public class WorkflowTest {
     final WorkflowInstanceEvent workflowInstance =
         deployAndCreateInstance(workflow, Collections.singletonMap("authorization", "token ABC"));
 
-    ZeebeTestRule.assertThat(workflowInstance).isEnded().hasVariables("statusCode", 401);
+    ZeebeTestRule.assertThat(workflowInstance).isEnded().hasVariable("statusCode", 401);
   }
 
   private WorkflowInstanceEvent deployAndCreateInstance(

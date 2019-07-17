@@ -39,7 +39,7 @@ public class ZeebeHttpWorker {
             .build();
 
     final HttpJobHandler jobHandler = new HttpJobHandler();
-    jobWorker = client.newWorker().jobType("http").handler(jobHandler).open();
+    jobWorker = client.newWorker().jobType("http").handler(jobHandler).fetchVariables(HttpJobHandler.VARIABLE_NAMES).open();
   }
 
   public void stop() {
