@@ -10,8 +10,12 @@ import io.zeebe.protocol.record.intent.MessageIntent;
 import io.zeebe.protocol.record.value.MessageRecordValue;
 import io.zeebe.test.ZeebeTestRule;
 import io.zeebe.test.util.record.RecordingExporter;
+
+import java.lang.reflect.Array;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.junit.After;
 import org.junit.Before;
@@ -39,7 +43,7 @@ public class WorkflowTest {
   }
 
   @Test
-  public void testGetRequest() {
+  public void shouldExecuteGetRequest() {
 
     final BpmnModelInstance workflow =
         Bpmn.createExecutableProcess("process")
@@ -68,7 +72,114 @@ public class WorkflowTest {
   }
 
   @Test
-  public void testPostRequest() {
+  public void shouldExecuteGetRequestWithQueryParametersFromContext() {
+
+    final BpmnModelInstance workflow =
+            Bpmn.createExecutableProcess("process")
+                    .startEvent()
+                    .serviceTask(
+                            "task",
+                            t ->
+                                    t.zeebeTaskType("http")
+                                            .zeebeTaskHeader("url", "https://jsonplaceholder.typicode.com/comments?postId=$context.postQueryParams.postId")
+                                            .zeebeTaskHeader("method", "GET"))
+                    .done();
+
+    final Map<String, Object> postQueryParams = new HashMap<>();
+    postQueryParams.put("postId", 1);
+    postQueryParams.put("id", 1);
+
+    Map<String, Object> context = new HashMap<>();
+    context.put("postQueryParams", postQueryParams);
+
+    final WorkflowInstanceEvent workflowInstance =
+            deployAndCreateInstance(workflow, Collections.singletonMap("context", context));
+
+    List<Map<String, Object>> posts = new ArrayList<>();
+
+    posts.add(createPost(1,1,
+            "id labore ex et quam laborum",
+            "Eliseo@gardner.biz",
+            "laudantium enim quasi est quidem magnam voluptate ipsam eos\ntempora quo necessitatibus\ndolor quam autem quasi\nreiciendis et nam sapiente accusantium"));
+
+     posts.add(createPost(2,1,
+            "quo vero reiciendis velit similique earum",
+            "Jayne_Kuhic@sydney.com",
+            "est natus enim nihil est dolore omnis voluptatem numquam\net omnis occaecati quod ullam at\nvoluptatem error expedita pariatur\nnihil sint nostrum voluptatem reiciendis et"));
+
+    posts.add(createPost(3,1,
+            "odio adipisci rerum aut animi",
+            "Nikita@garfield.biz",
+            "quia molestiae reprehenderit quasi aspernatur\naut expedita occaecati aliquam eveniet laudantium\nomnis quibusdam delectus saepe quia accusamus maiores nam est\ncum et ducimus et vero voluptates excepturi deleniti ratione"));
+
+     posts.add(createPost(4,1,
+            "alias odio sit",
+            "Lew@alysha.tv",
+            "non et atque\noccaecati deserunt quas accusantium unde odit nobis qui voluptatem\nquia voluptas consequuntur itaque dolor\net qui rerum deleniti ut occaecati"));
+
+    posts.add(createPost(5,1,
+            "vero eaque aliquid doloribus et culpa",
+            "Hayden@althea.biz",
+            "harum non quasi et ratione\ntempore iure ex voluptates in ratione\nharum architecto fugit inventore cupiditate\nvoluptates magni quo et"));
+
+    ZeebeTestRule.assertThat(workflowInstance)
+            .isEnded()
+            .hasVariable("statusCode", 200)
+            .hasVariable("body", posts);
+  }
+
+  @Test
+  public void shouldExecuteGetRequestWithQueryParameters() {
+
+    final BpmnModelInstance workflow =
+            Bpmn.createExecutableProcess("process")
+                    .startEvent()
+                    .serviceTask(
+                            "task",
+                            t ->
+                                    t.zeebeTaskType("http")
+                                            .zeebeTaskHeader("url", "https://jsonplaceholder.typicode.com/comments?postId=1")
+                                            .zeebeTaskHeader("method", "GET"))
+                    .done();
+
+    final WorkflowInstanceEvent workflowInstance =
+            deployAndCreateInstance(workflow, Collections.emptyMap());
+
+    List<Map<String, Object>> posts = new ArrayList<>();
+
+    posts.add(createPost(1,1,
+            "id labore ex et quam laborum",
+            "Eliseo@gardner.biz",
+            "laudantium enim quasi est quidem magnam voluptate ipsam eos\ntempora quo necessitatibus\ndolor quam autem quasi\nreiciendis et nam sapiente accusantium"));
+
+    posts.add(createPost(2,1,
+            "quo vero reiciendis velit similique earum",
+            "Jayne_Kuhic@sydney.com",
+            "est natus enim nihil est dolore omnis voluptatem numquam\net omnis occaecati quod ullam at\nvoluptatem error expedita pariatur\nnihil sint nostrum voluptatem reiciendis et"));
+
+    posts.add(createPost(3,1,
+            "odio adipisci rerum aut animi",
+            "Nikita@garfield.biz",
+            "quia molestiae reprehenderit quasi aspernatur\naut expedita occaecati aliquam eveniet laudantium\nomnis quibusdam delectus saepe quia accusamus maiores nam est\ncum et ducimus et vero voluptates excepturi deleniti ratione"));
+
+    posts.add(createPost(4,1,
+            "alias odio sit",
+            "Lew@alysha.tv",
+            "non et atque\noccaecati deserunt quas accusantium unde odit nobis qui voluptatem\nquia voluptas consequuntur itaque dolor\net qui rerum deleniti ut occaecati"));
+
+    posts.add(createPost(5,1,
+            "vero eaque aliquid doloribus et culpa",
+            "Hayden@althea.biz",
+            "harum non quasi et ratione\ntempore iure ex voluptates in ratione\nharum architecto fugit inventore cupiditate\nvoluptates magni quo et"));
+
+    ZeebeTestRule.assertThat(workflowInstance)
+            .isEnded()
+            .hasVariable("statusCode", 200)
+            .hasVariable("body", posts);
+  }
+
+  @Test
+  public void shouldExecutePostRequest() {
 
     final BpmnModelInstance workflow =
         Bpmn.createExecutableProcess("process")
@@ -99,7 +210,43 @@ public class WorkflowTest {
   }
 
   @Test
-  public void testPutRequest() {
+  public void shouldExecutePostRequestUsingContextVariableAsBody() {
+
+    final BpmnModelInstance workflow =
+            Bpmn.createExecutableProcess("process")
+                    .startEvent()
+                    .serviceTask(
+                            "task",
+                            t ->
+                                    t.zeebeTaskType("http")
+                                            .zeebeTaskHeader("url", "https://jsonplaceholder.typicode.com/todos/")
+                                            .zeebeTaskHeader("method", "POST")
+                                            .zeebeTaskHeader("postBodyVariableName", "context.todo"))
+
+                    .done();
+
+    final Map<String, Object> todo = new HashMap<>();
+    todo.put("userId", 99);
+    todo.put("title", "write good code");
+    todo.put("completed", false);
+
+    Map<String, Object> context = new HashMap<>();
+    context.put("todo", todo);
+
+    final WorkflowInstanceEvent workflowInstance =
+            deployAndCreateInstance(workflow, Collections.singletonMap("context", context));
+
+    final Map<String, Object> expectedResponse = new HashMap<>(todo);
+    expectedResponse.put("id", 201);
+
+    ZeebeTestRule.assertThat(workflowInstance)
+            .isEnded()
+            .hasVariable("statusCode", 201)
+            .hasVariable("body", expectedResponse);
+  }
+
+  @Test
+  public void shouldExecutePutRequest() {
 
     final BpmnModelInstance workflow =
         Bpmn.createExecutableProcess("process")
@@ -128,7 +275,7 @@ public class WorkflowTest {
   }
 
   @Test
-  public void testDeleteRequest() {
+  public void shouldExecuteDeleteRequest() {
 
     final BpmnModelInstance workflow =
         Bpmn.createExecutableProcess("process")
@@ -148,7 +295,7 @@ public class WorkflowTest {
   }
 
   @Test
-  public void testGetNotFoundResponse() {
+  public void shouldThrowNotFoundResponseOnGetIfResourceNotFound() {
 
     final BpmnModelInstance workflow =
         Bpmn.createExecutableProcess("process")
@@ -168,7 +315,7 @@ public class WorkflowTest {
   }
 
   @Test
-  public void testAuthorization() {
+  public void shouldUseAuthorization() {
 
     final BpmnModelInstance workflow =
         Bpmn.createExecutableProcess("process")
@@ -214,5 +361,18 @@ public class WorkflowTest {
             .send()
             .join();
     return workflowInstance;
+  }
+
+  private HashMap<String, Object> createPost(int id, int postId, String name, String email, String body){
+
+    HashMap<String, Object> post = new HashMap<>();
+
+    post.put("postId", postId);
+    post.put("id", id);
+    post.put("name", name);
+    post.put("email", email);
+    post.put("body", body);
+
+    return post;
   }
 }

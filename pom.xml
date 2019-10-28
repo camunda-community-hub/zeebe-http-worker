@@ -16,7 +16,7 @@
     </parent>
 
     <properties>
-        <version.zeebe>0.20.0</version.zeebe>
+        <version.zeebe>0.21.0</version.zeebe>
 
         <!-- release parent settings -->
         <version.java>11</version.java>
@@ -51,7 +51,7 @@
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-core</artifactId>
-            <version>2.9.9</version>
+            <version>2.10.0</version>
         </dependency>
 
         <!-- logging -->
@@ -65,6 +65,12 @@
             <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-slf4j-impl</artifactId>
             <version>2.11.1</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.httpcomponents</groupId>
+            <artifactId>httpclient</artifactId>
+            <version>4.5.5</version>
         </dependency>
 
         <!-- test -->

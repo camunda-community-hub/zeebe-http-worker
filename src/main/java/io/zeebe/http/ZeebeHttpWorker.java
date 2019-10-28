@@ -39,7 +39,11 @@ public class ZeebeHttpWorker {
             .build();
 
     final HttpJobHandler jobHandler = new HttpJobHandler();
-    jobWorker = client.newWorker().jobType("http").handler(jobHandler).fetchVariables(HttpJobHandler.VARIABLE_NAMES).open();
+    jobWorker = client.newWorker()
+            .jobType("http")
+            .handler(jobHandler)
+            /* .fetchVariables(HttpJobHandler.VARIABLE_NAMES) */ // Fetching a limited set of variables limits ability to use variables in stack
+            .open();
   }
 
   public void stop() {
