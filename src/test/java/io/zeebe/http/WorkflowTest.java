@@ -1,17 +1,10 @@
 package io.zeebe.http;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 import io.zeebe.client.ZeebeClient;
 import io.zeebe.client.api.response.WorkflowInstanceEvent;
 import io.zeebe.model.bpmn.Bpmn;
 import io.zeebe.model.bpmn.BpmnModelInstance;
-import io.zeebe.protocol.record.intent.MessageIntent;
-import io.zeebe.protocol.record.value.MessageRecordValue;
 import io.zeebe.test.ZeebeTestRule;
-import io.zeebe.test.util.record.RecordingExporter;
-
-import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -244,6 +237,8 @@ public class WorkflowTest {
             .hasVariable("statusCode", 201)
             .hasVariable("body", expectedResponse);
   }
+
+
 
   @Test
   public void shouldExecutePutRequest() {

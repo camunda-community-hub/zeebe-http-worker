@@ -55,26 +55,33 @@ public class HttpJobHandler implements JobHandler {
   public void handle(JobClient jobClient, ActivatedJob job)
       throws IOException, InterruptedException {
 
-    final HttpRequest request = buildRequest(job);
+    try {
+      final HttpRequest request = buildRequest(job);
 
-    _log.trace("created request : " + request);
+      _log.trace("created request : " + request);
 
-    final HttpResponse<String> response =
-        client.send(request, HttpResponse.BodyHandlers.ofString());
+      final HttpResponse<String> response =
+              client.send(request, HttpResponse.BodyHandlers.ofString());
 
-    Map<String, String> customHeaders = job.getCustomHeaders();
-    String resultVariableName = getVariable(customHeaders, RESULT_VARIABLE_NAME, PARAMETER_BODY);
+      Map<String, String> customHeaders = job.getCustomHeaders();
+      String resultVariableName = getVariable(customHeaders, RESULT_VARIABLE_NAME, PARAMETER_BODY);
 
-    _log.trace("HTTP result variable name is:" + resultVariableName);
+      _log.trace("HTTP result variable name is:" + resultVariableName);
 
-    final Map<String, Object> result = processResponse(resultVariableName, response);
+      final Map<String, Object> result = processResponse(resultVariableName, response);
 
-    _log.trace("response is : " + response);
+      _log.trace("response is : " + response);
 
-    jobClient.newCompleteCommand(job.getKey()).variables(result).send().join();
+      jobClient.newCompleteCommand(job.getKey()).variables(result).send().join();
+    }
+    catch (InvalidJsonPathException ex){
+
+      jobClient.newFailCommand(job.getKey()).retries(0).errorMessage(ex.getMessage()).send().join();
+
+    }
   }
 
-  private HttpRequest buildRequest(ActivatedJob job) {
+  private HttpRequest buildRequest(ActivatedJob job) throws InvalidJsonPathException {
     final Map<String, String> customHeaders = job.getCustomHeaders();
     final Map<String, Object> variables = job.getVariablesAsMap();
 
@@ -111,7 +118,7 @@ public class HttpJobHandler implements JobHandler {
 
   }
 
-  private String resolveQueryParameters(String url, Map<String, Object> variables)  {
+  public String resolveQueryParameters(String url, Map<String, Object> variables)  {
 
     String resolvedUrl = url;
 
@@ -130,8 +137,7 @@ public class HttpJobHandler implements JobHandler {
                 queryParamTokenizedValue,
                 queryParamResolvedValue);
 
-        resolvedUrl = url.replaceFirst("\\$" + resolvedQueryParamNameValuePair.getTokenizedValue(), resolvedQueryParamNameValuePair.getValue());
-        System.out.println(resolvedUrl);
+        resolvedUrl = resolvedUrl.replaceFirst("\\$" + resolvedQueryParamNameValuePair.getTokenizedValue(), resolvedQueryParamNameValuePair.getValue());
       }
     }
     catch (Exception ex){
@@ -159,7 +165,7 @@ public class HttpJobHandler implements JobHandler {
             .orElse(defaultValue);
   }
 
-  private HttpRequest.BodyPublisher getBodyPublisher(String postBodyVariableName, Map<String, Object> variables) {
+  private HttpRequest.BodyPublisher getBodyPublisher(String postBodyVariableName, Map<String, Object> variables) throws InvalidJsonPathException {
 
     _log.info("Variables are : " + variables);
 
@@ -169,7 +175,7 @@ public class HttpJobHandler implements JobHandler {
         .orElse(HttpRequest.BodyPublishers.noBody());
   }
 
-  private Object resolveContextVariable(String path, Map<String, Object> variables){
+  private Object resolveContextVariable(String path, Map<String, Object> variables) throws InvalidJsonPathException{
     Object value = null;
     String[] paths = path.split("\\.");
 
@@ -187,6 +193,11 @@ public class HttpJobHandler implements JobHandler {
     else {
       value = variables.get(path);
     }
+
+    if (value == null)
+      throw new InvalidJsonPathException(String.format("Could not resolve value for JsonPath %s. " +
+              "Please correct the JsonPath " +
+              "or ensure your workflow variable contains an object at this JsonPath.", path));
 
     return value;
   }
