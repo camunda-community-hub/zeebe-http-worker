@@ -87,9 +87,15 @@ public class HttpJobHandler implements JobHandler {
 
     final String url = getUrl(customHeaders, variables);
     final String method = getMethod(customHeaders);
-    String postBodyVariableName = getVariable(customHeaders, POST_BODY_VARIABLE_NAME, PARAMETER_BODY);
+    HttpRequest.BodyPublisher bodyPublisher = null;
 
-    final HttpRequest.BodyPublisher bodyPublisher = getBodyPublisher(postBodyVariableName, variables);
+    //no need trying to resolve a body for GET requests
+    if ("GET".equals(method)){
+		 bodyPublisher = HttpRequest.BodyPublishers.noBody();
+	}else {
+		String postBodyVariableName = getVariable(customHeaders, POST_BODY_VARIABLE_NAME, PARAMETER_BODY);
+		bodyPublisher = getBodyPublisher(postBodyVariableName, variables);
+	}
 
     final HttpRequest.Builder builder =
         HttpRequest.newBuilder()
@@ -167,7 +173,7 @@ public class HttpJobHandler implements JobHandler {
 
   private HttpRequest.BodyPublisher getBodyPublisher(String postBodyVariableName, Map<String, Object> variables) throws InvalidJsonPathException {
 
-    _log.info("Variables are : " + variables);
+    _log.trace("Variables are : " + variables);
 
     return Optional.ofNullable(resolveContextVariable(postBodyVariableName, variables))
         .map(this::bodyToJson)
@@ -181,7 +187,7 @@ public class HttpJobHandler implements JobHandler {
 
     if (paths.length > 1){
 
-      // we have navigate a path such as property1.property2.....
+      // we have to navigate a path such as property1.property2.....
       Map<String, Object> currentObject = variables;
       int i = 0;
       for (; i < paths.length - 1; i++){
