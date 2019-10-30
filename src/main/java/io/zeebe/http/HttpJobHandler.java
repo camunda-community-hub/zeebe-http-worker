@@ -135,7 +135,14 @@ public class HttpJobHandler implements JobHandler {
       for (NameValuePair tokenizedQueryParam : tokenizedQueryParams) {
 
         String queryParamName = tokenizedQueryParam.getName();
-        String queryParamTokenizedValue = tokenizedQueryParam.getValue().replaceFirst("\\$", "");
+        String queryParamValue = tokenizedQueryParam.getValue();
+
+        if (!queryParamValue.startsWith("$")) {
+          // nothing to resolve
+          continue;
+        }
+
+        String queryParamTokenizedValue = queryParamValue.replaceFirst("\\$", "");
         String queryParamResolvedValue = resolveContextVariable(queryParamTokenizedValue, variables).toString();
 
         TokenizedQueryParameterNameValuePair resolvedQueryParamNameValuePair = new TokenizedQueryParameterNameValuePair(

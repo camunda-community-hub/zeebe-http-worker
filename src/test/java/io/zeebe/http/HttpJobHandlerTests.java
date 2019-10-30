@@ -37,4 +37,19 @@ public class HttpJobHandlerTests {
 
 		Assert.assertEquals("http://localhost:7200/api/posts?postid=1&commentid=c1&userid=john.doe", url);
 	}
+
+	@Test
+	public void shouldNotAttemptToResolveeNonTokenizedQueryParameters(){
+
+		HttpJobHandler sut = new HttpJobHandler();
+
+		String url = "http://localhost:7200/api/posts?postid=$postid&userid=john.doe";
+		Map<String, Object> variables = new HashMap<>();
+		variables.put("postid", 1);
+		variables.put("userid", "john.doe");
+
+		url = sut.resolveQueryParameters(url, variables);
+
+		Assert.assertEquals("http://localhost:7200/api/posts?postid=1&userid=john.doe", url);
+	}
 }
