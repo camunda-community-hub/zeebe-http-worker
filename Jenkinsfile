@@ -30,6 +30,19 @@ spec:
         requests:
           cpu: 1
           memory: 2Gi
+    - name: docker
+      image: docker:18.09.4-dind
+      args: ["--storage-driver=overlay2"]
+      securityContext:
+        privileged: true
+      tty: true
+      resources:
+        limits:
+          cpu: 1
+          memory: 1Gi
+        requests:
+          cpu: 500m
+          memory: 512Mi
 '''
     }
   }
@@ -42,6 +55,7 @@ spec:
 
   environment {
     NEXUS = credentials("camunda-nexus")
+    DOCKER_HUB = credentials("camunda-dockerhub")
   }
 
   parameters {
@@ -58,6 +72,9 @@ spec:
             sh 'apt-get install --no-install-recommends -qq -y libatomic1'
             sh 'mvn clean install -B -s .ci/settings.xml -DskipTests'
         }
+        container('docker') {
+            sh 'docker login --username ${DOCKER_HUB_USR} --password ${DOCKER_HUB_PSW}'
+        }
       }
     }
 
@@ -66,6 +83,9 @@ spec:
       steps {
         container('maven') {
             sh 'mvn install -B -s .ci/settings.xml'
+        }
+        container('docker') {
+            sh 'docker build -t camunda/zeebe-http-worker:SNAPSHOT .'
         }
       }
 
@@ -81,6 +101,9 @@ spec:
       steps {
         container('maven') {
             sh 'mvn -B -s .ci/settings.xml generate-sources source:jar javadoc:jar deploy -DskipTests'
+        }
+        container('docker') {
+            sh 'docker push camunda/zeebe-http-worker:SNAPSHOT'
         }
       }
     }
@@ -109,6 +132,13 @@ spec:
             sh 'mvn -B -s .ci/settings.xml -DskipTests source:jar javadoc:jar release:prepare release:perform -Prelease'
             sh '.ci/scripts/github-release.sh'
           }
+        }
+
+        container('docker') {
+            sh 'docker tag camunda/zeebe-http-worker:SNAPSHOT camunda/zeebe-http-worker:${RELEASE_VERSION}'
+            sh 'docker push camunda/zeebe-http-worker:${RELEASE_VERSION}'
+            sh 'docker tag camunda/zeebe-http-worker:SNAPSHOT camunda/zeebe-http-worker:latest'
+            sh 'docker push camunda/zeebe-http-worker:latest'
         }
       }
     }
