@@ -53,6 +53,18 @@
             <artifactId>jackson-core</artifactId>
             <version>2.9.9</version>
         </dependency>
+        
+        <!-- Readyness Probes -->       
+		<dependency>
+		    <groupId>org.eclipse.jetty</groupId>
+		    <artifactId>jetty-server</artifactId>
+		    <version>9.4.22.v20191022</version>
+		</dependency>        
+		<dependency>
+		    <groupId>org.eclipse.jetty</groupId>
+		    <artifactId>jetty-servlet</artifactId>
+		    <version>9.4.22.v20191022</version>
+		</dependency>        
 
         <!-- logging -->
         <dependency>

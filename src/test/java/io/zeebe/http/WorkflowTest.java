@@ -1,22 +1,29 @@
 package io.zeebe.http;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import java.io.IOException;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.eclipse.jetty.server.Connector;
+import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.server.ServerConnector;
+import org.eclipse.jetty.servlet.ServletHandler;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
 
 import io.zeebe.client.ZeebeClient;
 import io.zeebe.client.api.response.WorkflowInstanceEvent;
 import io.zeebe.model.bpmn.Bpmn;
 import io.zeebe.model.bpmn.BpmnModelInstance;
-import io.zeebe.protocol.record.intent.MessageIntent;
-import io.zeebe.protocol.record.value.MessageRecordValue;
 import io.zeebe.test.ZeebeTestRule;
-import io.zeebe.test.util.record.RecordingExporter;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
 
 public class WorkflowTest {
 
@@ -65,6 +72,92 @@ public class WorkflowTest {
         .isEnded()
         .hasVariable("statusCode", 200)
         .hasVariable("body", expectedResponse);
+  }
+
+  @Test
+  public void testGetRequestWithExpressions() throws InterruptedException {
+
+    final BpmnModelInstance workflow =
+        Bpmn.createExecutableProcess("process")
+            .startEvent()
+            .serviceTask(
+                "task",
+                t ->
+                    t.zeebeTaskType("http")
+                        .zeebeTaskHeader("url", "${myUrl}")
+                        .zeebeTaskHeader("method", "${myMethod}"))
+            .done();
+
+    HashMap<String, Object> variables = new HashMap<>();
+    variables.put("myUrl", "https://jsonplaceholder.typicode.com/todos/1");
+    variables.put("myMethod", "GET");
+    final WorkflowInstanceEvent workflowInstance =
+        deployAndCreateInstance(workflow, variables);
+
+    final Map<String, Object> expectedResponse = new HashMap<>();
+    expectedResponse.put("userId", 1);
+    expectedResponse.put("id", 1);
+    expectedResponse.put("title", "delectus aut autem");
+    expectedResponse.put("completed", false);
+    
+    ZeebeTestRule.assertThat(workflowInstance)
+        .isEnded()
+        .hasVariable("statusCode", 200)
+        .hasVariable("body", expectedResponse);
+  }
+  
+  public static class ConfigServlet extends HttpServlet {
+    private static final long serialVersionUID = 1L;
+    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+      response.setContentType("application/json");
+      response.setStatus(HttpServletResponse.SC_OK);
+      response.getWriter().println("{ \"baseUrl\": \"https://jsonplaceholder.typicode.com\"}");
+    }
+  }
+
+  @Test
+  public void testGetRequestWithExpressionAndConfigJson() throws Exception {
+    Server server = new Server();
+    ServerConnector connector = new ServerConnector(server);
+    connector.setPort(9988);
+    server.setConnectors(new Connector[] { connector });
+    ServletHandler servletHandler = new ServletHandler();
+    server.setHandler(servletHandler);
+    servletHandler.addServletWithMapping(ConfigServlet.class, "/config");    
+    server.start();
+    EnvironmentVariableLoader.MOCK_ENV_VARS_URL = "http://localhost:9988/config";
+    try {
+      final BpmnModelInstance workflow =
+          Bpmn.createExecutableProcess("process")
+              .startEvent()
+              .serviceTask(
+                  "task",
+                  t ->
+                      t.zeebeTaskType("http")
+                          .zeebeTaskHeader("url", "${baseUrl}/todos/${someNumber}")
+                          .zeebeTaskHeader("method", "${myMethod}"))
+              .done();
+  
+      HashMap<String, Object> variables = new HashMap<>();
+      variables.put("someNumber", "1");
+      variables.put("myMethod", "GET");
+      final WorkflowInstanceEvent workflowInstance =
+          deployAndCreateInstance(workflow, variables);
+  
+      final Map<String, Object> expectedResponse = new HashMap<>();
+      expectedResponse.put("userId", 1);
+      expectedResponse.put("id", 1);
+      expectedResponse.put("title", "delectus aut autem");
+      expectedResponse.put("completed", false);
+      
+      ZeebeTestRule.assertThat(workflowInstance)
+          .isEnded()
+          .hasVariable("statusCode", 200)
+          .hasVariable("body", expectedResponse);
+    }
+    finally {
+      server.stop();
+    }
   }
 
   @Test

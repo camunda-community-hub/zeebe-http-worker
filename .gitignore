@@ -18,3 +18,4 @@ trace.out
 .coverage/
 .logs/
 *.iml
+/target/

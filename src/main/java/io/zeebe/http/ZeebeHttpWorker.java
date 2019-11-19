@@ -39,7 +39,12 @@ public class ZeebeHttpWorker {
             .build();
 
     final HttpJobHandler jobHandler = new HttpJobHandler();
-    jobWorker = client.newWorker().jobType("http").handler(jobHandler).fetchVariables(HttpJobHandler.VARIABLE_NAMES).open();
+    jobWorker = client.newWorker() //
+        .jobType("http") //
+        .handler(jobHandler) //
+        //.fetchVariables(HttpJobHandler.VARIABLE_NAMES) // we need to fetch everything 
+        // to do expression resolving in the worker until we can do full expressions in Zeebe itself
+        .open();
   }
 
   public void stop() {

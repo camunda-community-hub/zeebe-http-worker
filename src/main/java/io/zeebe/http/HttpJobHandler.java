@@ -39,11 +39,11 @@ public class HttpJobHandler implements JobHandler {
   private static final String PARAMETER_BODY = "body";
   private static final String PARAMETER_AUTHORIZATION = "authorization";
 
-  public static final List<String> VARIABLE_NAMES = Arrays.asList(PARAMETER_URL, PARAMETER_BODY, PARAMETER_AUTHORIZATION);
+//  public static final List<String> VARIABLE_NAMES = Arrays.asList(PARAMETER_URL, PARAMETER_BODY, PARAMETER_AUTHORIZATION);
 
   final HttpClient client = HttpClient.newHttpClient();
-
   final ObjectMapper objectMapper = new ObjectMapper();
+  final EnvironmentVariableLoader environmentVariableLoader = new EnvironmentVariableLoader();
 
   @Override
   public void handle(JobClient jobClient, ActivatedJob job)
@@ -58,14 +58,16 @@ public class HttpJobHandler implements JobHandler {
 
     jobClient.newCompleteCommand(job.getKey()).variables(result).send().join();
   }
-
+  
   private HttpRequest buildRequest(ActivatedJob job) {
-    final Map<String, String> customHeaders = job.getCustomHeaders();
-    final Map<String, Object> variables = job.getVariablesAsMap();
+    ConfigurationMaps configurationMaps = new ConfigurationMaps();
+    configurationMaps.customHeaders = job.getCustomHeaders();
+    configurationMaps.variables = job.getVariablesAsMap();
+    configurationMaps.environmentVariables = environmentVariableLoader.loadVariables();
 
-    final String url = getUrl(customHeaders, variables);
-    final String method = getMethod(customHeaders);
-    final HttpRequest.BodyPublisher bodyPublisher = getBodyPublisher(variables);
+    final String url = getUrl(configurationMaps);
+    final String method = getMethod(configurationMaps);
+    final HttpRequest.BodyPublisher bodyPublisher = getBodyPublisher(configurationMaps);
 
     final HttpRequest.Builder builder =
         HttpRequest.newBuilder()
@@ -75,37 +77,61 @@ public class HttpJobHandler implements JobHandler {
             .header("Accept", "application/json")
             .method(method, bodyPublisher);
 
-    getAuthentication(customHeaders, variables)
+    getAuthentication(configurationMaps)
         .ifPresent(auth -> builder.header("Authorization", auth));
 
     return builder.build();
   }
 
-  private String getUrl(Map<String, String> customHeaders, Map<String, Object> variables) {
-    return Optional.ofNullable(variables.get(PARAMETER_URL))
-        .map(String::valueOf)
-        .or(() -> Optional.ofNullable(customHeaders.get(PARAMETER_URL)))
-        .filter(url -> !url.isEmpty())
-        .orElseThrow(() -> new RuntimeException("Missing required parameter: " + PARAMETER_URL));
+  /**
+   * The URL can be configured either in the custom headers, the variables or the environmentVariables.
+   * An ${expressions} can be used to be filled with variables or environmentVariables
+   */
+  private String getUrl(ConfigurationMaps configMaps) {
+    return configMaps.replaceVariables( //
+        Optional.ofNullable(configMaps.customHeaders.get(PARAMETER_URL)) //
+        .or(() -> Optional.ofNullable(configMaps.variables.get(PARAMETER_URL)).map(String::valueOf)) //
+        .or(() -> Optional.ofNullable(configMaps.environmentVariables.get(PARAMETER_URL))) //
+        .filter(url -> !url.isEmpty()) //
+        .orElseThrow(() -> new RuntimeException("Missing required parameter: " + PARAMETER_URL)));
   }
 
-  private Optional<String> getAuthentication(
-      Map<String, String> customHeaders, Map<String, Object> variables) {
-    return Optional.ofNullable(variables.get(PARAMETER_AUTHORIZATION))
-        .map(String::valueOf)
-        .or(() -> Optional.ofNullable(customHeaders.get(PARAMETER_AUTHORIZATION)));
+  /**
+   * The Authentication can be configured either in the custom headers, the variables or the environmentVariables.
+   * An ${expressions} can be used to be filled with variables or environmentVariables
+   */
+  private Optional<String> getAuthentication(ConfigurationMaps configMaps) {
+    return Optional.ofNullable(configMaps.customHeaders.get(PARAMETER_AUTHORIZATION)) //
+        .or(() -> Optional.ofNullable(configMaps.variables.get(PARAMETER_AUTHORIZATION)).map(String::valueOf)) //
+        .or(() -> Optional.ofNullable(configMaps.environmentVariables.get(PARAMETER_AUTHORIZATION)))
+        .map(configMaps::replaceVariables);
   }
 
-  private String getMethod(Map<String, String> customHeaders) {
-    return Optional.ofNullable(customHeaders.get(PARAMETER_METHOD))
+  /**
+   * The Method can be configured either in the custom headers, the variables or the environmentVariables.
+   * An ${expressions} can be used to be filled with variables or environmentVariables
+   */
+  private String getMethod(ConfigurationMaps configMaps) {
+    return Optional.ofNullable(configMaps.customHeaders.get(PARAMETER_METHOD)) //
+        .or(() -> Optional.ofNullable(configMaps.variables.get(PARAMETER_METHOD)).map(String::valueOf)) //
+        .or(() -> Optional.ofNullable(configMaps.environmentVariables.get(PARAMETER_METHOD)))
+        .map(configMaps::replaceVariables)
         .map(String::toUpperCase)
         .orElse("GET");
   }
 
-  private HttpRequest.BodyPublisher getBodyPublisher(Map<String, Object> variables) {
-    return Optional.ofNullable(variables.get(PARAMETER_BODY))
-        .map(this::bodyToJson)
-        .map(HttpRequest.BodyPublishers::ofString)
+  /**
+   * The Body is typically configured via the variable 'body', but can also be configured via 
+   * custom headers or environmentVariables.
+   * An ${expressions} can be used to be filled with variables or environmentVariables
+   */
+  private HttpRequest.BodyPublisher getBodyPublisher(ConfigurationMaps configMaps) {
+    return Optional.ofNullable(configMaps.variables.get(PARAMETER_BODY)) //
+        .or(() -> Optional.ofNullable(configMaps.customHeaders.get(PARAMETER_BODY))) //
+        .or(() -> Optional.ofNullable(configMaps.environmentVariables.get(PARAMETER_BODY))) //
+        .map(this::bodyToJson) //
+        .map(configMaps::replaceVariables)
+        .map(HttpRequest.BodyPublishers::ofString) //
         .orElse(HttpRequest.BodyPublishers.noBody());
   }
 
