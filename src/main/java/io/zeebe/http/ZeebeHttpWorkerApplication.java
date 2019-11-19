@@ -22,15 +22,24 @@ import org.slf4j.LoggerFactory;
 
 public class ZeebeHttpWorkerApplication {
 
+  // environment variable to be set for the broker contact point
   public static final String ENV_CONTACT_POINT = "zeebe.client.broker.contactPoint";
+  // alternative environment variable (used in cloud)
+  public static final String ENV_ZEEBE_GATEWAY_ADDRESS = "ZEEBE_GATEWAY_ADDRESS";
+  
   private static final String DEFAULT_CONTACT_POINT = "127.0.0.1:26500";
 
   private static Logger LOG = LoggerFactory.getLogger("zeebe-http-worker");
 
   public static void main(String[] args) {
+    
+    HealthAndReadynessProbe probe = new HealthAndReadynessProbe();
+    probe.start();
 
     final String contactPoint =
-        Optional.ofNullable(System.getenv(ENV_CONTACT_POINT)).orElse(DEFAULT_CONTACT_POINT);
+        Optional.ofNullable(System.getenv(ENV_CONTACT_POINT)) //
+        .or(() -> Optional.ofNullable(System.getenv(ENV_ZEEBE_GATEWAY_ADDRESS))) //
+        .orElse(DEFAULT_CONTACT_POINT);
 
     LOG.info("Connecting worker to {}", contactPoint);
 
@@ -41,5 +50,6 @@ public class ZeebeHttpWorkerApplication {
       new CountDownLatch(1).await();
     } catch (InterruptedException e) {
     }
+    probe.stop();
   }
 }
