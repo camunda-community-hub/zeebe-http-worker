@@ -17,17 +17,21 @@ package io.zeebe.http;
 
 import io.zeebe.client.ZeebeClient;
 import io.zeebe.client.api.worker.JobWorker;
+import io.zeebe.http.config.ConfigProvider;
 
 import java.time.Duration;
+import java.util.Optional;
 
 public class ZeebeHttpWorker {
 
   private final String contactPoint;
+  private ConfigProvider configProvider;
 
   private JobWorker jobWorker;
 
-  public ZeebeHttpWorker(String contactPoint) {
+  public ZeebeHttpWorker(String contactPoint, ConfigProvider configProvider) {
     this.contactPoint = contactPoint;
+    this.configProvider = configProvider;
   }
 
   public void start() {
@@ -38,13 +42,10 @@ public class ZeebeHttpWorker {
             .defaultJobTimeout(Duration.ofSeconds(10))
             .build();
 
-    final HttpJobHandler jobHandler = new HttpJobHandler();
-    jobWorker = client.newWorker() //
-        .jobType("http") //
-        .handler(jobHandler) //
-        //.fetchVariables(HttpJobHandler.VARIABLE_NAMES) // we need to fetch everything 
-        // to do expression resolving in the worker until we can do full expressions in Zeebe itself
-        .open();
+    final HttpJobHandler jobHandler = new HttpJobHandler(configProvider);
+
+    // fetch all variables to support expressions/placeholders
+    jobWorker = client.newWorker().jobType("http").handler(jobHandler).open();
   }
 
   public void stop() {

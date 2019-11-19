@@ -15,14 +15,21 @@
  */
 package io.zeebe.http;
 
-import java.util.Optional;
-import java.util.concurrent.CountDownLatch;
+import io.zeebe.http.config.ConfigProvider;
+import io.zeebe.http.config.HttpConfigProvider;
+import io.zeebe.http.config.NoConfigProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.time.Duration;
+import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
 
 public class ZeebeHttpWorkerApplication {
 
   public static final String ENV_CONTACT_POINT = "zeebe.client.broker.contactPoint";
+  public static final String ENV_VARS_URL = "ENV_VARS_URL";
+
   private static final String DEFAULT_CONTACT_POINT = "127.0.0.1:26500";
 
   private static Logger LOG = LoggerFactory.getLogger("zeebe-http-worker");
@@ -32,9 +39,14 @@ public class ZeebeHttpWorkerApplication {
     final String contactPoint =
         Optional.ofNullable(System.getenv(ENV_CONTACT_POINT)).orElse(DEFAULT_CONTACT_POINT);
 
+    final ConfigProvider configProvider =
+        Optional.ofNullable(System.getenv(ENV_VARS_URL))
+            .<ConfigProvider>map(url -> new HttpConfigProvider(url, Duration.ofSeconds(15)))
+            .orElse(new NoConfigProvider());
+
     LOG.info("Connecting worker to {}", contactPoint);
 
-    final ZeebeHttpWorker worker = new ZeebeHttpWorker(contactPoint);
+    final ZeebeHttpWorker worker = new ZeebeHttpWorker(contactPoint, configProvider);
     worker.start();
 
     try {
