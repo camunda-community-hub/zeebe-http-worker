@@ -20,6 +20,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.zeebe.client.api.response.ActivatedJob;
 import io.zeebe.client.api.worker.JobClient;
 import io.zeebe.client.api.worker.JobHandler;
+import io.zeebe.http.config.ConfigProvider;
 
 import java.io.IOException;
 import java.net.URI;
@@ -27,8 +28,6 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
-import java.util.Arrays;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -39,11 +38,15 @@ public class HttpJobHandler implements JobHandler {
   private static final String PARAMETER_BODY = "body";
   private static final String PARAMETER_AUTHORIZATION = "authorization";
 
-  public static final List<String> VARIABLE_NAMES = Arrays.asList(PARAMETER_URL, PARAMETER_BODY, PARAMETER_AUTHORIZATION);
+  private final HttpClient client = HttpClient.newHttpClient();
+  private final ObjectMapper objectMapper = new ObjectMapper();
+  private final PlaceholderProcessor placeholderProcessor = new PlaceholderProcessor();
 
-  final HttpClient client = HttpClient.newHttpClient();
+  private final ConfigProvider configProvider;
 
-  final ObjectMapper objectMapper = new ObjectMapper();
+  public HttpJobHandler(ConfigProvider configProvider) {
+    this.configProvider = configProvider;
+  }
 
   @Override
   public void handle(JobClient jobClient, ActivatedJob job)
@@ -60,12 +63,14 @@ public class HttpJobHandler implements JobHandler {
   }
 
   private HttpRequest buildRequest(ActivatedJob job) {
-    final Map<String, String> customHeaders = job.getCustomHeaders();
-    final Map<String, Object> variables = job.getVariablesAsMap();
+    final ConfigurationMaps configurationMaps =
+        new ConfigurationMaps(
+            job.getCustomHeaders(), job.getVariablesAsMap(), configProvider.getVariables());
 
-    final String url = getUrl(customHeaders, variables);
-    final String method = getMethod(customHeaders);
-    final HttpRequest.BodyPublisher bodyPublisher = getBodyPublisher(variables);
+    final String url = getUrl(configurationMaps);
+
+    final String method = getMethod(configurationMaps);
+    final HttpRequest.BodyPublisher bodyPublisher = getBodyPublisher(configurationMaps);
 
     final HttpRequest.Builder builder =
         HttpRequest.newBuilder()
@@ -75,36 +80,43 @@ public class HttpJobHandler implements JobHandler {
             .header("Accept", "application/json")
             .method(method, bodyPublisher);
 
-    getAuthentication(customHeaders, variables)
-        .ifPresent(auth -> builder.header("Authorization", auth));
+    getAuthentication(configurationMaps).ifPresent(auth -> builder.header("Authorization", auth));
 
     return builder.build();
   }
 
-  private String getUrl(Map<String, String> customHeaders, Map<String, Object> variables) {
-    return Optional.ofNullable(variables.get(PARAMETER_URL))
-        .map(String::valueOf)
-        .or(() -> Optional.ofNullable(customHeaders.get(PARAMETER_URL)))
-        .filter(url -> !url.isEmpty())
+  private String getUrl(ConfigurationMaps configMaps) {
+    return configMaps
+        .getString(PARAMETER_URL)
+        .map(url -> placeholderProcessor.process(url, configMaps.getConfig()))
         .orElseThrow(() -> new RuntimeException("Missing required parameter: " + PARAMETER_URL));
   }
 
-  private Optional<String> getAuthentication(
-      Map<String, String> customHeaders, Map<String, Object> variables) {
-    return Optional.ofNullable(variables.get(PARAMETER_AUTHORIZATION))
-        .map(String::valueOf)
-        .or(() -> Optional.ofNullable(customHeaders.get(PARAMETER_AUTHORIZATION)));
+  private Optional<String> getAuthentication(ConfigurationMaps configMaps) {
+    return configMaps
+        .getString(PARAMETER_AUTHORIZATION)
+        .map(auth -> placeholderProcessor.process(auth, configMaps.getConfig()));
   }
 
-  private String getMethod(Map<String, String> customHeaders) {
-    return Optional.ofNullable(customHeaders.get(PARAMETER_METHOD))
+  private String getMethod(ConfigurationMaps configMaps) {
+    return configMaps
+        .getString(PARAMETER_METHOD)
+        .map(method -> placeholderProcessor.process(method, configMaps.getConfig()))
         .map(String::toUpperCase)
         .orElse("GET");
   }
 
-  private HttpRequest.BodyPublisher getBodyPublisher(Map<String, Object> variables) {
-    return Optional.ofNullable(variables.get(PARAMETER_BODY))
-        .map(this::bodyToJson)
+  private HttpRequest.BodyPublisher getBodyPublisher(ConfigurationMaps configMaps) {
+    return configMaps
+        .get(PARAMETER_BODY)
+        .map(
+            body -> {
+              if (body instanceof String) {
+                return placeholderProcessor.process((String) body, configMaps.getConfig());
+              } else {
+                return bodyToJson(body);
+              }
+            })
         .map(HttpRequest.BodyPublishers::ofString)
         .orElse(HttpRequest.BodyPublishers.noBody());
   }
