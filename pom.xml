@@ -17,7 +17,7 @@
     </parent>
 
     <properties>
-        <version.zeebe>0.20.0</version.zeebe>
+        <version.zeebe>0.21.1</version.zeebe>
 
         <!-- release parent settings -->
         <version.java>11</version.java>
