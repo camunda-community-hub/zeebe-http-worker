@@ -6,8 +6,10 @@ import io.zeebe.client.api.response.WorkflowInstanceEvent;
 import io.zeebe.http.config.ConfigProvider;
 import io.zeebe.http.config.HttpConfigProvider;
 import io.zeebe.model.bpmn.Bpmn;
-import io.zeebe.model.bpmn.BpmnModelInstance;
+import io.zeebe.model.bpmn.builder.ServiceTaskBuilder;
+import io.zeebe.protocol.record.intent.JobIntent;
 import io.zeebe.test.ZeebeTestRule;
+import io.zeebe.test.util.record.RecordingExporter;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -15,13 +17,23 @@ import org.junit.Test;
 
 import java.time.Duration;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Consumer;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
+import static com.github.tomakehurst.wiremock.client.WireMock.delete;
+import static com.github.tomakehurst.wiremock.client.WireMock.deleteRequestedFor;
+import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.equalToJson;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
+import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
+import static com.github.tomakehurst.wiremock.client.WireMock.post;
+import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
+import static com.github.tomakehurst.wiremock.client.WireMock.put;
+import static com.github.tomakehurst.wiremock.client.WireMock.putRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlMatching;
 
 public class WorkflowTest {
 
@@ -55,201 +67,99 @@ public class WorkflowTest {
   @Test
   public void testGetRequest() {
 
-    final BpmnModelInstance workflow =
-        Bpmn.createExecutableProcess("process")
-            .startEvent()
-            .serviceTask(
-                "task",
-                t ->
-                    t.zeebeTaskType("http")
-                        .zeebeTaskHeader("url", "https://jsonplaceholder.typicode.com/todos/1")
-                        .zeebeTaskHeader("method", "GET"))
-            .done();
+    stubFor(
+        get(urlEqualTo("/api"))
+            .willReturn(
+                aResponse().withHeader("Content-Type", "application/json").withBody("{\"x\":1}")));
 
     final WorkflowInstanceEvent workflowInstance =
-        deployAndCreateInstance(workflow, Collections.emptyMap());
-
-    final Map<String, Object> expectedResponse = new HashMap<>();
-    expectedResponse.put("userId", 1);
-    expectedResponse.put("id", 1);
-    expectedResponse.put("title", "delectus aut autem");
-    expectedResponse.put("completed", false);
-
-    ZeebeTestRule.assertThat(workflowInstance)
-        .isEnded()
-        .hasVariable("statusCode", 200)
-        .hasVariable("body", expectedResponse);
-  }
-
-  @Test
-  public void testGetRequestWithExpressions() throws InterruptedException {
-
-    final BpmnModelInstance workflow =
-        Bpmn.createExecutableProcess("process")
-            .startEvent()
-            .serviceTask(
-                "task",
-                t ->
-                    t.zeebeTaskType("http")
-                        .zeebeTaskHeader("url", "https://jsonplaceholder.typicode.com/todos/{{id}}")
-                        .zeebeTaskHeader("method", "PUT")
-                        .zeebeTaskHeader(
-                            "body",
-                            "{\"id\":{{id}}, \"userId\":1, \"title\":\"{{title}}\", \"completed\":true}"))
-            .done();
-
-    HashMap<String, Object> variables = new HashMap<>();
-    variables.put("id", "1");
-    variables.put("title", "find happiness");
-
-    final Map<String, Object> requestBody = new HashMap<>();
-    requestBody.put("userId", 1);
-    requestBody.put("id", 1);
-    requestBody.put("title", "find happiness");
-    requestBody.put("completed", true);
-
-    final WorkflowInstanceEvent workflowInstance = deployAndCreateInstance(workflow, variables);
+        createInstance(
+            serviceTask ->
+                serviceTask
+                    .zeebeTaskHeader("url", wireMockRule.baseUrl() + "/api")
+                    .zeebeTaskHeader("method", "GET"),
+            Collections.emptyMap());
 
     ZeebeTestRule.assertThat(workflowInstance)
         .isEnded()
         .hasVariable("statusCode", 200)
-        .hasVariable("body", requestBody);
-  }
+        .hasVariable("body", Map.of("x", 1));
 
-  @Test
-  public void testGetRequestWithExpressionAndConfigJson() throws Exception {
-
-    stubFor(
-        get(urlEqualTo("/config"))
-            .willReturn(
-                aResponse()
-                    .withHeader("Content-Type", "application/json")
-                    .withBody("{ \"baseUrl\": \"https://jsonplaceholder.typicode.com\"}")));
-
-    final BpmnModelInstance workflow =
-        Bpmn.createExecutableProcess("process")
-            .startEvent()
-            .serviceTask(
-                "task",
-                t ->
-                    t.zeebeTaskType("http")
-                        .zeebeTaskHeader("url", "{{baseUrl}}/todos/{{someNumber}}")
-                        .zeebeTaskHeader("method", "{{myMethod}}"))
-            .done();
-
-    HashMap<String, Object> variables = new HashMap<>();
-    variables.put("someNumber", "1");
-    variables.put("myMethod", "GET");
-    final WorkflowInstanceEvent workflowInstance = deployAndCreateInstance(workflow, variables);
-
-    final Map<String, Object> expectedResponse = new HashMap<>();
-    expectedResponse.put("userId", 1);
-    expectedResponse.put("id", 1);
-    expectedResponse.put("title", "delectus aut autem");
-    expectedResponse.put("completed", false);
-
-    ZeebeTestRule.assertThat(workflowInstance)
-        .isEnded()
-        .hasVariable("statusCode", 200)
-        .hasVariable("body", expectedResponse);
+    wireMockRule.verify(getRequestedFor(urlEqualTo("/api")));
   }
 
   @Test
   public void testPostRequest() {
 
-    final BpmnModelInstance workflow =
-        Bpmn.createExecutableProcess("process")
-            .startEvent()
-            .serviceTask(
-                "task",
-                t ->
-                    t.zeebeTaskType("http")
-                        .zeebeTaskHeader("url", "https://jsonplaceholder.typicode.com/todos/")
-                        .zeebeTaskHeader("method", "POST"))
-            .done();
-
-    final Map<String, Object> requestBody = new HashMap<>();
-    requestBody.put("userId", 99);
-    requestBody.put("title", "write good code");
-    requestBody.put("completed", false);
+    stubFor(post(urlEqualTo("/api")).willReturn(aResponse().withStatus(201)));
 
     final WorkflowInstanceEvent workflowInstance =
-        deployAndCreateInstance(workflow, Collections.singletonMap("body", requestBody));
+        createInstance(
+            serviceTask ->
+                serviceTask
+                    .zeebeTaskHeader("url", wireMockRule.baseUrl() + "/api")
+                    .zeebeTaskHeader("method", "POST"),
+            Map.of("body", Map.of("x", 1)));
 
-    final Map<String, Object> expectedResponse = new HashMap<>(requestBody);
-    expectedResponse.put("id", 201);
+    ZeebeTestRule.assertThat(workflowInstance).isEnded().hasVariable("statusCode", 201);
 
-    ZeebeTestRule.assertThat(workflowInstance)
-        .isEnded()
-        .hasVariable("statusCode", 201)
-        .hasVariable("body", expectedResponse);
+    wireMockRule.verify(
+        postRequestedFor(urlEqualTo("/api"))
+            .withHeader("Content-Type", equalTo("application/json"))
+            .withRequestBody(equalToJson("{\"x\":1}")));
   }
 
   @Test
   public void testPutRequest() {
 
-    final BpmnModelInstance workflow =
-        Bpmn.createExecutableProcess("process")
-            .startEvent()
-            .serviceTask(
-                "task",
-                t ->
-                    t.zeebeTaskType("http")
-                        .zeebeTaskHeader("url", "https://jsonplaceholder.typicode.com/todos/1")
-                        .zeebeTaskHeader("method", "PUT"))
-            .done();
-
-    final Map<String, Object> requestBody = new HashMap<>();
-    requestBody.put("userId", 1);
-    requestBody.put("id", 1);
-    requestBody.put("title", "find happiness");
-    requestBody.put("completed", true);
+    stubFor(put(urlEqualTo("/api")).willReturn(aResponse().withStatus(200)));
 
     final WorkflowInstanceEvent workflowInstance =
-        deployAndCreateInstance(workflow, Collections.singletonMap("body", requestBody));
+        createInstance(
+            serviceTask ->
+                serviceTask
+                    .zeebeTaskHeader("url", wireMockRule.baseUrl() + "/api")
+                    .zeebeTaskHeader("method", "PUT"),
+            Map.of("body", Map.of("x", 1)));
 
-    ZeebeTestRule.assertThat(workflowInstance)
-        .isEnded()
-        .hasVariable("statusCode", 200)
-        .hasVariable("body", requestBody);
+    ZeebeTestRule.assertThat(workflowInstance).isEnded().hasVariable("statusCode", 200);
+
+    wireMockRule.verify(
+        putRequestedFor(urlEqualTo("/api"))
+            .withHeader("Content-Type", equalTo("application/json"))
+            .withRequestBody(equalToJson("{\"x\":1}")));
   }
 
   @Test
   public void testDeleteRequest() {
 
-    final BpmnModelInstance workflow =
-        Bpmn.createExecutableProcess("process")
-            .startEvent()
-            .serviceTask(
-                "task",
-                t ->
-                    t.zeebeTaskType("http")
-                        .zeebeTaskHeader("url", "https://jsonplaceholder.typicode.com/todos/1")
-                        .zeebeTaskHeader("method", "DELETE"))
-            .done();
+    stubFor(delete(urlEqualTo("/api")).willReturn(aResponse().withStatus(200)));
 
     final WorkflowInstanceEvent workflowInstance =
-        deployAndCreateInstance(workflow, Collections.emptyMap());
+        createInstance(
+            serviceTask ->
+                serviceTask
+                    .zeebeTaskHeader("url", wireMockRule.baseUrl() + "/api")
+                    .zeebeTaskHeader("method", "DELETE"),
+            Collections.emptyMap());
 
     ZeebeTestRule.assertThat(workflowInstance).isEnded().hasVariable("statusCode", 200);
+
+    wireMockRule.verify(deleteRequestedFor(urlEqualTo("/api")));
   }
 
   @Test
   public void testGetNotFoundResponse() {
 
-    final BpmnModelInstance workflow =
-        Bpmn.createExecutableProcess("process")
-            .startEvent()
-            .serviceTask(
-                "task",
-                t ->
-                    t.zeebeTaskType("http")
-                        .zeebeTaskHeader("url", "https://jsonplaceholder.typicode.com/todos/999")
-                        .zeebeTaskHeader("method", "GET"))
-            .done();
+    stubFor(get(urlEqualTo("/api")).willReturn(aResponse().withStatus(404)));
 
     final WorkflowInstanceEvent workflowInstance =
-        deployAndCreateInstance(workflow, Collections.emptyMap());
+        createInstance(
+            serviceTask ->
+                serviceTask
+                    .zeebeTaskHeader("url", wireMockRule.baseUrl() + "/api")
+                    .zeebeTaskHeader("method", "GET"),
+            Map.of());
 
     ZeebeTestRule.assertThat(workflowInstance).isEnded().hasVariable("statusCode", 404);
   }
@@ -257,40 +167,114 @@ public class WorkflowTest {
   @Test
   public void testAuthorization() {
 
-    final BpmnModelInstance workflow =
-        Bpmn.createExecutableProcess("process")
-            .startEvent()
-            .serviceTask(
-                "stargazers-check",
-                t ->
-                    t.zeebeTaskType("http")
-                        .zeebeTaskHeader(
-                            "url",
-                            "https://api.github.com/user/starred/zeebe-io/zeebe-http-worker"))
-            .exclusiveGateway()
-            .defaultFlow()
-            .endEvent()
-            .moveToLastGateway()
-            .condition("statusCode == 404")
-            .serviceTask(
-                "give-a-start",
-                t ->
-                    t.zeebeTaskType("http")
-                        .zeebeTaskHeader(
-                            "url", "https://api.github.com/user/starred/zeebe-io/zeebe-http-worker")
-                        .zeebeTaskHeader("method", "PUT"))
-            .endEvent()
-            .done();
+    stubFor(get(urlEqualTo("/api")).willReturn(aResponse()));
 
     final WorkflowInstanceEvent workflowInstance =
-        deployAndCreateInstance(workflow, Collections.singletonMap("authorization", "token ABC"));
+        createInstance(
+            serviceTask ->
+                serviceTask
+                    .zeebeTaskHeader("url", wireMockRule.baseUrl() + "/api")
+                    .zeebeTaskHeader("method", "GET"),
+            Map.of("authorization", "token 123"));
 
-    ZeebeTestRule.assertThat(workflowInstance).isEnded().hasVariable("statusCode", 401);
+    ZeebeTestRule.assertThat(workflowInstance).isEnded().hasVariable("statusCode", 200);
+
+    wireMockRule.verify(
+        getRequestedFor(urlEqualTo("/api")).withHeader("Authorization", equalTo("token 123")));
   }
 
-  private WorkflowInstanceEvent deployAndCreateInstance(
-      final BpmnModelInstance workflow, Map<String, Object> variables) {
-    client.newDeployCommand().addWorkflowModel(workflow, "process.bpmn").send().join();
+  @Test
+  public void testReplacePlaceholdersWithVariables() {
+
+    stubFor(post(urlMatching("/api/.*")).willReturn(aResponse().withStatus(201)));
+
+    final WorkflowInstanceEvent workflowInstance =
+        createInstance(
+            serviceTask ->
+                serviceTask
+                    .zeebeTaskHeader("url", wireMockRule.baseUrl() + "/api/{{x}}")
+                    .zeebeTaskHeader("method", "POST")
+                    .zeebeTaskHeader("body", "{\"y\":{{y}}}"),
+            Map.of("x", 1, "y", 2));
+
+    ZeebeTestRule.assertThat(workflowInstance).isEnded().hasVariable("statusCode", 201);
+
+    wireMockRule.verify(
+        postRequestedFor(urlEqualTo("/api/1"))
+            .withHeader("Content-Type", equalTo("application/json"))
+            .withRequestBody(equalToJson("{\"y\":2}")));
+  }
+
+  @Test
+  public void testReplacePlaceholdersWithContext() {
+
+    stubFor(post(urlMatching("/api/.*")).willReturn(aResponse().withStatus(201)));
+
+    final WorkflowInstanceEvent workflowInstance =
+        createInstance(
+            serviceTask ->
+                serviceTask
+                    .zeebeTaskHeader("url", wireMockRule.baseUrl() + "/api/{{jobKey}}")
+                    .zeebeTaskHeader("method", "POST")
+                    .zeebeTaskHeader("body", "{\"instanceKey\":{{workflowInstanceKey}}}"),
+            Map.of());
+
+    ZeebeTestRule.assertThat(workflowInstance).isEnded().hasVariable("statusCode", 201);
+
+    final var job =
+        RecordingExporter.jobRecords(JobIntent.CREATED)
+            .withWorkflowInstanceKey(workflowInstance.getWorkflowInstanceKey())
+            .getFirst();
+
+    wireMockRule.verify(
+        postRequestedFor(urlEqualTo("/api/" + job.getKey()))
+            .withHeader("Content-Type", equalTo("application/json"))
+            .withRequestBody(
+                equalToJson(
+                    "{\"instanceKey\":" + workflowInstance.getWorkflowInstanceKey() + "}")));
+  }
+
+  @Test
+  public void testReplacePlaceholdersWithConfig() {
+
+    stubFor(
+        get(urlEqualTo("/config"))
+            .willReturn(
+                aResponse()
+                    .withHeader("Content-Type", "application/json")
+                    .withBody("{ \"x\":1,\"y\":2}")));
+
+    stubFor(post(urlMatching("/api/.*")).willReturn(aResponse().withStatus(201)));
+
+    final WorkflowInstanceEvent workflowInstance =
+        createInstance(
+            serviceTask ->
+                serviceTask
+                    .zeebeTaskHeader("url", wireMockRule.baseUrl() + "/api/{{x}}")
+                    .zeebeTaskHeader("method", "POST")
+                    .zeebeTaskHeader("body", "{\"y\":{{y}}}"),
+            Map.of());
+
+    ZeebeTestRule.assertThat(workflowInstance).isEnded().hasVariable("statusCode", 201);
+
+    wireMockRule.verify(
+        postRequestedFor(urlEqualTo("/api/1"))
+            .withHeader("Content-Type", equalTo("application/json"))
+            .withRequestBody(equalToJson("{\"y\":2}")));
+  }
+
+  private WorkflowInstanceEvent createInstance(
+      final Consumer<ServiceTaskBuilder> taskCustomizer, Map<String, Object> variables) {
+
+    final var processBuilder =
+        Bpmn.createExecutableProcess("process")
+            .startEvent()
+            .serviceTask("task", t -> t.zeebeTaskType("http"));
+
+    taskCustomizer.accept(processBuilder);
+    processBuilder.endEvent();
+
+    client.newDeployCommand().addWorkflowModel(processBuilder.done(), "process.bpmn").send().join();
 
     final WorkflowInstanceEvent workflowInstance =
         client
@@ -300,6 +284,7 @@ public class WorkflowTest {
             .variables(variables)
             .send()
             .join();
+
     return workflowInstance;
   }
 }

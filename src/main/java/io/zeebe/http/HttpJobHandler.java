@@ -64,8 +64,7 @@ public class HttpJobHandler implements JobHandler {
 
   private HttpRequest buildRequest(ActivatedJob job) {
     final ConfigurationMaps configurationMaps =
-        new ConfigurationMaps(
-            job.getCustomHeaders(), job.getVariablesAsMap(), configProvider.getVariables());
+        new ConfigurationMaps(job, configProvider.getVariables());
 
     final String url = getUrl(configurationMaps);
 
