@@ -57,7 +57,7 @@ public class HttpJobHandler implements JobHandler {
     final HttpResponse<String> response =
         client.send(request, HttpResponse.BodyHandlers.ofString());
 
-    final Map<String, Object> result = processResponse(response);
+    final Map<String, Object> result = processResponse(job, response);
 
     jobClient.newCompleteCommand(job.getKey()).variables(result).send().join();
   }
@@ -128,15 +128,21 @@ public class HttpJobHandler implements JobHandler {
     }
   }
 
-  private Map<String, Object> processResponse(HttpResponse<String> response) {
+  private Map<String, Object> processResponse(ActivatedJob job, HttpResponse<String> response) {
     final Map<String, Object> result = new java.util.HashMap<>();
 
-    result.put("statusCode", response.statusCode());
+    final var statusCode = response.statusCode();
+    result.put("statusCode", statusCode);
 
     Optional.ofNullable(response.body())
         .filter(body -> !body.isEmpty())
         .map(this::bodyToObject)
         .ifPresent(body -> result.put("body", body));
+
+    if (statusCode == 202) {
+      // expose the job key to allow correlation of asynchronous results
+      result.put("jobKey", job.getKey());
+    }
 
     return result;
   }

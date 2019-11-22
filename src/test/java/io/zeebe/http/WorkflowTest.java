@@ -47,7 +47,7 @@ public class WorkflowTest {
   public static void init() {
 
     final ConfigProvider configProvider =
-        new HttpConfigProvider(WIRE_MOCK_RULE.baseUrl() + "/config", Duration.ofSeconds(15));
+        new HttpConfigProvider(WIRE_MOCK_RULE.baseUrl() + "/config", Duration.ZERO);
 
     stubFor(
         get(urlEqualTo("/config"))
@@ -171,7 +171,7 @@ public class WorkflowTest {
   }
 
   @Test
-  public void testAuthorization() {
+  public void testAuthorizationHeader() {
 
     stubFor(get(urlEqualTo("/api")).willReturn(aResponse()));
 
@@ -190,7 +190,31 @@ public class WorkflowTest {
   }
 
   @Test
-  public void testReplacePlaceholdersWithVariables() {
+  public void shouldExposeJobKeyIfStatusCode202() {
+
+    stubFor(post(urlEqualTo("/api")).willReturn(aResponse().withStatus(202)));
+
+    final WorkflowInstanceEvent workflowInstance =
+        createInstance(
+            serviceTask ->
+                serviceTask
+                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
+                    .zeebeTaskHeader("method", "POST"),
+            Map.of("body", Map.of("x", 1)));
+
+    final var job =
+        RecordingExporter.jobRecords(JobIntent.CREATED)
+            .withWorkflowInstanceKey(workflowInstance.getWorkflowInstanceKey())
+            .getFirst();
+
+    ZeebeTestRule.assertThat(workflowInstance)
+        .isEnded()
+        .hasVariable("statusCode", 202)
+        .hasVariable("jobKey", job.getKey());
+  }
+
+  @Test
+  public void shouldReplacePlaceholdersWithVariables() {
 
     stubFor(post(urlMatching("/api/.*")).willReturn(aResponse().withStatus(201)));
 
@@ -212,7 +236,7 @@ public class WorkflowTest {
   }
 
   @Test
-  public void testReplacePlaceholdersWithContext() {
+  public void shouldReplacePlaceholdersWithContext() {
 
     stubFor(post(urlMatching("/api/.*")).willReturn(aResponse().withStatus(201)));
 
@@ -241,7 +265,7 @@ public class WorkflowTest {
   }
 
   @Test
-  public void testReplacePlaceholdersWithConfig() {
+  public void shouldReplacePlaceholdersWithConfig() {
 
     stubFor(
         get(urlEqualTo("/config"))
