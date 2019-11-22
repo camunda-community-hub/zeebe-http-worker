@@ -68,9 +68,11 @@ spec:
     stage('Prepare') {
       steps {
         container('maven') {
+          configFileProvider([configFile(fileId: 'maven-nexus-settings-zeebe', variable: 'MAVEN_SETTINGS_XML')]) {
             sh 'apt-get update'
             sh 'apt-get install --no-install-recommends -qq -y libatomic1'
-            sh 'mvn clean install -B -s .ci/settings.xml -DskipTests'
+            sh 'mvn clean install -B -s $MAVEN_SETTINGS_XML -DskipTests'
+          }
         }
         container('docker') {
             sh 'docker login --username ${DOCKER_HUB_USR} --password ${DOCKER_HUB_PSW}'
@@ -82,7 +84,9 @@ spec:
       when { not { expression { params.RELEASE } } }
       steps {
         container('maven') {
-            sh 'mvn install -B -s .ci/settings.xml'
+          configFileProvider([configFile(fileId: 'maven-nexus-settings-zeebe', variable: 'MAVEN_SETTINGS_XML')]) {
+            sh 'mvn install -B -s $MAVEN_SETTINGS_XML'
+          }
         }
         container('docker') {
             sh 'docker build -t camunda/zeebe-http-worker:SNAPSHOT .'
@@ -100,7 +104,9 @@ spec:
       when { not { expression { params.RELEASE } } }
       steps {
         container('maven') {
-            sh 'mvn -B -s .ci/settings.xml generate-sources source:jar javadoc:jar deploy -DskipTests'
+          configFileProvider([configFile(fileId: 'maven-nexus-settings-zeebe', variable: 'MAVEN_SETTINGS_XML')]) {
+            sh 'mvn -B -s $MAVEN_SETTINGS_XML generate-sources source:jar javadoc:jar deploy -DskipTests'
+          }
         }
         container('docker') {
             sh 'docker push camunda/zeebe-http-worker:SNAPSHOT'
@@ -123,14 +129,16 @@ spec:
 
       steps {
         container('maven') {
-          sshagent(['camunda-jenkins-github-ssh']) {
-            sh 'gpg -q --import ${GPG_PUB_KEY} '
-            sh 'gpg -q --allow-secret-key-import --import --no-tty --batch --yes ${GPG_SEC_KEY}'
-            sh 'git config --global user.email "ci@camunda.com"'
-            sh 'git config --global user.name "camunda-jenkins"'
-            sh 'mkdir ~/.ssh/ && ssh-keyscan github.com >> ~/.ssh/known_hosts'
-            sh 'mvn -B -s .ci/settings.xml -DskipTests source:jar javadoc:jar release:prepare release:perform -Prelease'
-            sh '.ci/scripts/github-release.sh'
+          configFileProvider([configFile(fileId: 'maven-nexus-settings-zeebe', variable: 'MAVEN_SETTINGS_XML')]) {
+              sshagent(['camunda-jenkins-github-ssh']) {
+                sh 'gpg -q --import ${GPG_PUB_KEY} '
+                sh 'gpg -q --allow-secret-key-import --import --no-tty --batch --yes ${GPG_SEC_KEY}'
+                sh 'git config --global user.email "ci@camunda.com"'
+                sh 'git config --global user.name "camunda-jenkins"'
+                sh 'mkdir ~/.ssh/ && ssh-keyscan github.com >> ~/.ssh/known_hosts'
+                sh 'mvn -B -s $MAVEN_SETTINGS_XML -DskipTests source:jar javadoc:jar release:prepare release:perform -Prelease'
+                sh '.ci/scripts/github-release.sh'
+            }
           }
         }
 
