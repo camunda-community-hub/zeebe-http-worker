@@ -1,7 +1,6 @@
 package io.zeebe.http;
 
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
-import io.zeebe.client.ZeebeClient;
 import io.zeebe.client.api.response.WorkflowInstanceEvent;
 import io.zeebe.http.config.ConfigProvider;
 import io.zeebe.http.config.HttpConfigProvider;
@@ -10,9 +9,10 @@ import io.zeebe.model.bpmn.builder.ServiceTaskBuilder;
 import io.zeebe.protocol.record.intent.JobIntent;
 import io.zeebe.test.ZeebeTestRule;
 import io.zeebe.test.util.record.RecordingExporter;
-import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
-import org.junit.Rule;
+import org.junit.BeforeClass;
+import org.junit.ClassRule;
 import org.junit.Test;
 
 import java.time.Duration;
@@ -37,31 +37,37 @@ import static com.github.tomakehurst.wiremock.client.WireMock.urlMatching;
 
 public class WorkflowTest {
 
-  @Rule public final ZeebeTestRule testRule = new ZeebeTestRule();
+  @ClassRule public static final ZeebeTestRule TEST_RULE = new ZeebeTestRule();
 
-  @Rule public WireMockRule wireMockRule = new WireMockRule(8089);
+  @ClassRule public static WireMockRule WIRE_MOCK_RULE = new WireMockRule(8089);
 
-  private ZeebeClient client;
-  private ZeebeHttpWorker worker;
+  private static ZeebeHttpWorker JOB_WORKER;
 
-  @Before
-  public void init() {
-    client = testRule.getClient();
+  @BeforeClass
+  public static void init() {
 
     final ConfigProvider configProvider =
-        new HttpConfigProvider(wireMockRule.baseUrl() + "/config", Duration.ofSeconds(15));
+        new HttpConfigProvider(WIRE_MOCK_RULE.baseUrl() + "/config", Duration.ofSeconds(15));
 
     stubFor(
         get(urlEqualTo("/config"))
             .willReturn(aResponse().withHeader("Content-Type", "application/json").withBody("{}")));
 
-    worker = new ZeebeHttpWorker(client.getConfiguration().getBrokerContactPoint(), configProvider);
-    worker.start();
+    JOB_WORKER =
+        new ZeebeHttpWorker(
+            TEST_RULE.getClient().getConfiguration().getBrokerContactPoint(), configProvider);
+
+    JOB_WORKER.start();
   }
 
-  @After
-  public void cleanUp() {
-    worker.stop();
+  @AfterClass
+  public static void cleanUp() {
+    JOB_WORKER.stop();
+  }
+
+  @Before
+  public void resetMock() {
+    WIRE_MOCK_RULE.resetRequests();
   }
 
   @Test
@@ -76,7 +82,7 @@ public class WorkflowTest {
         createInstance(
             serviceTask ->
                 serviceTask
-                    .zeebeTaskHeader("url", wireMockRule.baseUrl() + "/api")
+                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
                     .zeebeTaskHeader("method", "GET"),
             Collections.emptyMap());
 
@@ -85,7 +91,7 @@ public class WorkflowTest {
         .hasVariable("statusCode", 200)
         .hasVariable("body", Map.of("x", 1));
 
-    wireMockRule.verify(getRequestedFor(urlEqualTo("/api")));
+    WIRE_MOCK_RULE.verify(getRequestedFor(urlEqualTo("/api")));
   }
 
   @Test
@@ -97,13 +103,13 @@ public class WorkflowTest {
         createInstance(
             serviceTask ->
                 serviceTask
-                    .zeebeTaskHeader("url", wireMockRule.baseUrl() + "/api")
+                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
                     .zeebeTaskHeader("method", "POST"),
             Map.of("body", Map.of("x", 1)));
 
     ZeebeTestRule.assertThat(workflowInstance).isEnded().hasVariable("statusCode", 201);
 
-    wireMockRule.verify(
+    WIRE_MOCK_RULE.verify(
         postRequestedFor(urlEqualTo("/api"))
             .withHeader("Content-Type", equalTo("application/json"))
             .withRequestBody(equalToJson("{\"x\":1}")));
@@ -118,13 +124,13 @@ public class WorkflowTest {
         createInstance(
             serviceTask ->
                 serviceTask
-                    .zeebeTaskHeader("url", wireMockRule.baseUrl() + "/api")
+                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
                     .zeebeTaskHeader("method", "PUT"),
             Map.of("body", Map.of("x", 1)));
 
     ZeebeTestRule.assertThat(workflowInstance).isEnded().hasVariable("statusCode", 200);
 
-    wireMockRule.verify(
+    WIRE_MOCK_RULE.verify(
         putRequestedFor(urlEqualTo("/api"))
             .withHeader("Content-Type", equalTo("application/json"))
             .withRequestBody(equalToJson("{\"x\":1}")));
@@ -139,13 +145,13 @@ public class WorkflowTest {
         createInstance(
             serviceTask ->
                 serviceTask
-                    .zeebeTaskHeader("url", wireMockRule.baseUrl() + "/api")
+                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
                     .zeebeTaskHeader("method", "DELETE"),
             Collections.emptyMap());
 
     ZeebeTestRule.assertThat(workflowInstance).isEnded().hasVariable("statusCode", 200);
 
-    wireMockRule.verify(deleteRequestedFor(urlEqualTo("/api")));
+    WIRE_MOCK_RULE.verify(deleteRequestedFor(urlEqualTo("/api")));
   }
 
   @Test
@@ -157,7 +163,7 @@ public class WorkflowTest {
         createInstance(
             serviceTask ->
                 serviceTask
-                    .zeebeTaskHeader("url", wireMockRule.baseUrl() + "/api")
+                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
                     .zeebeTaskHeader("method", "GET"),
             Map.of());
 
@@ -173,13 +179,13 @@ public class WorkflowTest {
         createInstance(
             serviceTask ->
                 serviceTask
-                    .zeebeTaskHeader("url", wireMockRule.baseUrl() + "/api")
+                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
                     .zeebeTaskHeader("method", "GET"),
             Map.of("authorization", "token 123"));
 
     ZeebeTestRule.assertThat(workflowInstance).isEnded().hasVariable("statusCode", 200);
 
-    wireMockRule.verify(
+    WIRE_MOCK_RULE.verify(
         getRequestedFor(urlEqualTo("/api")).withHeader("Authorization", equalTo("token 123")));
   }
 
@@ -192,14 +198,14 @@ public class WorkflowTest {
         createInstance(
             serviceTask ->
                 serviceTask
-                    .zeebeTaskHeader("url", wireMockRule.baseUrl() + "/api/{{x}}")
+                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api/{{x}}")
                     .zeebeTaskHeader("method", "POST")
                     .zeebeTaskHeader("body", "{\"y\":{{y}}}"),
             Map.of("x", 1, "y", 2));
 
     ZeebeTestRule.assertThat(workflowInstance).isEnded().hasVariable("statusCode", 201);
 
-    wireMockRule.verify(
+    WIRE_MOCK_RULE.verify(
         postRequestedFor(urlEqualTo("/api/1"))
             .withHeader("Content-Type", equalTo("application/json"))
             .withRequestBody(equalToJson("{\"y\":2}")));
@@ -214,7 +220,7 @@ public class WorkflowTest {
         createInstance(
             serviceTask ->
                 serviceTask
-                    .zeebeTaskHeader("url", wireMockRule.baseUrl() + "/api/{{jobKey}}")
+                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api/{{jobKey}}")
                     .zeebeTaskHeader("method", "POST")
                     .zeebeTaskHeader("body", "{\"instanceKey\":{{workflowInstanceKey}}}"),
             Map.of());
@@ -226,7 +232,7 @@ public class WorkflowTest {
             .withWorkflowInstanceKey(workflowInstance.getWorkflowInstanceKey())
             .getFirst();
 
-    wireMockRule.verify(
+    WIRE_MOCK_RULE.verify(
         postRequestedFor(urlEqualTo("/api/" + job.getKey()))
             .withHeader("Content-Type", equalTo("application/json"))
             .withRequestBody(
@@ -250,14 +256,14 @@ public class WorkflowTest {
         createInstance(
             serviceTask ->
                 serviceTask
-                    .zeebeTaskHeader("url", wireMockRule.baseUrl() + "/api/{{x}}")
+                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api/{{x}}")
                     .zeebeTaskHeader("method", "POST")
                     .zeebeTaskHeader("body", "{\"y\":{{y}}}"),
             Map.of());
 
     ZeebeTestRule.assertThat(workflowInstance).isEnded().hasVariable("statusCode", 201);
 
-    wireMockRule.verify(
+    WIRE_MOCK_RULE.verify(
         postRequestedFor(urlEqualTo("/api/1"))
             .withHeader("Content-Type", equalTo("application/json"))
             .withRequestBody(equalToJson("{\"y\":2}")));
@@ -274,10 +280,16 @@ public class WorkflowTest {
     taskCustomizer.accept(processBuilder);
     processBuilder.endEvent();
 
-    client.newDeployCommand().addWorkflowModel(processBuilder.done(), "process.bpmn").send().join();
+    TEST_RULE
+        .getClient()
+        .newDeployCommand()
+        .addWorkflowModel(processBuilder.done(), "process.bpmn")
+        .send()
+        .join();
 
     final WorkflowInstanceEvent workflowInstance =
-        client
+        TEST_RULE
+            .getClient()
             .newCreateInstanceCommand()
             .bpmnProcessId("process")
             .latestVersion()
