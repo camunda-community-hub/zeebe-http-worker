@@ -15,13 +15,6 @@
  */
 package io.zeebe.http;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.zeebe.client.api.response.ActivatedJob;
-import io.zeebe.client.api.worker.JobClient;
-import io.zeebe.client.api.worker.JobHandler;
-import io.zeebe.http.config.ConfigProvider;
-
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -31,6 +24,17 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.zeebe.client.api.response.ActivatedJob;
+import io.zeebe.client.api.worker.JobClient;
+import io.zeebe.client.api.worker.JobHandler;
+
+@Component
 public class HttpJobHandler implements JobHandler {
 
   private static final String PARAMETER_URL = "url";
@@ -42,11 +46,8 @@ public class HttpJobHandler implements JobHandler {
   private final ObjectMapper objectMapper = new ObjectMapper();
   private final PlaceholderProcessor placeholderProcessor = new PlaceholderProcessor();
 
-  private final ConfigProvider configProvider;
-
-  public HttpJobHandler(ConfigProvider configProvider) {
-    this.configProvider = configProvider;
-  }
+  @Autowired
+  private EnvironmentVariableProvider environmentVariableProvider;
 
   @Override
   public void handle(JobClient jobClient, ActivatedJob job)
@@ -64,7 +65,7 @@ public class HttpJobHandler implements JobHandler {
 
   private HttpRequest buildRequest(ActivatedJob job) {
     final ConfigurationMaps configurationMaps =
-        new ConfigurationMaps(job, configProvider.getVariables());
+        new ConfigurationMaps(job, environmentVariableProvider.getVariables());
 
     final String url = getUrl(configurationMaps);
 
@@ -131,7 +132,7 @@ public class HttpJobHandler implements JobHandler {
   private Map<String, Object> processResponse(ActivatedJob job, HttpResponse<String> response) {
     final Map<String, Object> result = new java.util.HashMap<>();
 
-    final var statusCode = response.statusCode();
+    int statusCode = response.statusCode();
     result.put("statusCode", statusCode);
 
     Optional.ofNullable(response.body())

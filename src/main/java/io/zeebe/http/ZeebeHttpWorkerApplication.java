@@ -15,43 +15,38 @@
  */
 package io.zeebe.http;
 
-import io.zeebe.http.config.ConfigProvider;
-import io.zeebe.http.config.HttpConfigProvider;
-import io.zeebe.http.config.NoConfigProvider;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.time.Duration;
-import java.util.Optional;
+import java.io.IOException;
 import java.util.concurrent.CountDownLatch;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+import io.zeebe.client.api.response.ActivatedJob;
+import io.zeebe.client.api.worker.JobClient;
+import io.zeebe.spring.client.EnableZeebeClient;
+import io.zeebe.spring.client.annotation.ZeebeWorker;
+
+@SpringBootApplication
+@EnableZeebeClient
 public class ZeebeHttpWorkerApplication {
 
-  public static final String ENV_CONTACT_POINT = "zeebe.client.broker.contactPoint";
-  public static final String ENV_VARS_URL = "ENV_VARS_URL";
-
-  private static final String DEFAULT_CONTACT_POINT = "127.0.0.1:26500";
-
-  private static Logger LOG = LoggerFactory.getLogger("zeebe-http-worker");
-
   public static void main(String[] args) {
-
-    final String contactPoint =
-        Optional.ofNullable(System.getenv(ENV_CONTACT_POINT)).orElse(DEFAULT_CONTACT_POINT);
-
-    final ConfigProvider configProvider =
-        Optional.ofNullable(System.getenv(ENV_VARS_URL))
-            .<ConfigProvider>map(url -> new HttpConfigProvider(url, Duration.ofSeconds(15)))
-            .orElse(new NoConfigProvider());
-
-    LOG.info("Connecting worker to {}", contactPoint);
-
-    final ZeebeHttpWorker worker = new ZeebeHttpWorker(contactPoint, configProvider);
-    worker.start();
-
+    SpringApplication.run(ZeebeHttpWorkerApplication.class, args);
     try {
       new CountDownLatch(1).await();
     } catch (InterruptedException e) {
     }
   }
+  
+  @Autowired
+  private HttpJobHandler jobHandler;
+
+  // This code does not limit the variables resolves
+  // That means the worker always fetches all variables to support expressions/placeholders
+  // as a workaround until https://github.com/zeebe-io/zeebe/issues/3417 is there
+  @ZeebeWorker(type = "http")
+  public void handleFooJob(final JobClient client, final ActivatedJob job) throws IOException, InterruptedException {
+    jobHandler.handle(client, job);
+  }  
 }

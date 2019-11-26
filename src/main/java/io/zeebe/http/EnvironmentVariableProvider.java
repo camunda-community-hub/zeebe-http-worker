@@ -1,6 +1,4 @@
-package io.zeebe.http.config;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
+package io.zeebe.http;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -10,6 +8,12 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.stereotype.Component;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 /**
  * Helper to load environment variables from a configured URL as JSON map.
  *
@@ -18,39 +22,33 @@ import java.util.Map;
  * <p>Current limitation: The URL needs to be open and accessible, so security needs to be addressed
  * on the network layer (JWT support is in the roadmap)
  */
-public class HttpConfigProvider implements ConfigProvider {
+@Component
+public class EnvironmentVariableProvider {
+  
+  @Autowired
+  private ZeebeHttpWorkerConfig config;
 
   private final HttpClient client = HttpClient.newHttpClient();
   private final ObjectMapper objectMapper = new ObjectMapper();
 
-  private final Duration reloadInterval;
-  private final String url;
-
   private Instant lastUpdate = Instant.MIN;
   private Map<String, String> cachedVariables = null;
-
-  public HttpConfigProvider(String url, Duration reloadInterval) {
-    this.url = url;
-    this.reloadInterval = reloadInterval;
-  }
-
-  @Override
+  
   public Map<String, String> getVariables() {
-
     // only read if environment variable is set, otherwise return empty map
-    if (url == null || url.length() == 0) {
+    if (!config.isEnvironmentVariableUrlSet()) {
       return Map.of();
     }
     // if cached values are there and up-to-date, return them
     if (cachedVariables != null
-        && Duration.between(lastUpdate, Instant.now()).toMillis() < reloadInterval.toMillis()) {
+        && Duration.between(lastUpdate, Instant.now()).toMillis() < config.getEnvironmentVariableReloadInterval().toMillis()) {
       return cachedVariables;
     }
     // otherwise reload cache and return the new values
     try {
       HttpRequest getVariablesRequest =
           HttpRequest.newBuilder()
-              .uri(URI.create(url))
+              .uri(URI.create(config.getEnvironmentVariableUrl()))
               .header("Accept", "application/json")
               .GET()
               .build();
@@ -63,7 +61,7 @@ public class HttpConfigProvider implements ConfigProvider {
       return cachedVariables;
     } catch (Exception e) {
       throw new RuntimeException(
-          "Could not load variables from '" + url + "': " + e.getMessage(), e);
+          "Could not load variables from '" + config.getEnvironmentVariableUrl() + "': " + e.getMessage(), e);
     }
   }
 }
