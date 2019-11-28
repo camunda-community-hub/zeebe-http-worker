@@ -41,6 +41,8 @@ public class HttpJobHandler implements JobHandler {
   private static final String PARAMETER_METHOD = "method";
   private static final String PARAMETER_BODY = "body";
   private static final String PARAMETER_AUTHORIZATION = "authorization";
+  private static final String PARAMETER_HTTP_STATUS_CODE_FAILURE = "statusCodeFailure";
+  private static final String PARAMETER_HTTP_STATUS_CODE_COMPLETION = "statusCodeCompletion";
 
   private final HttpClient client = HttpClient.newHttpClient();
   private final ObjectMapper objectMapper = new ObjectMapper();
@@ -50,23 +52,29 @@ public class HttpJobHandler implements JobHandler {
   private EnvironmentVariableProvider environmentVariableProvider;
 
   @Override
-  public void handle(JobClient jobClient, ActivatedJob job)
-      throws IOException, InterruptedException {
+  public void handle(JobClient jobClient, ActivatedJob job) throws IOException, InterruptedException {
 
-    final HttpRequest request = buildRequest(job);
+    final ConfigurationMaps configurationMaps = new ConfigurationMaps(job, environmentVariableProvider.getVariables());
+    final HttpRequest request = buildRequest(configurationMaps);
 
-    final HttpResponse<String> response =
-        client.send(request, HttpResponse.BodyHandlers.ofString());
-
-    final Map<String, Object> result = processResponse(job, response);
-
-    jobClient.newCompleteCommand(job.getKey()).variables(result).send().join();
+    final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+    
+    if (hasFailingStatusCode(response, configurationMaps)) {
+      jobClient.newFailCommand(job.getKey()); 
+    } else if (hasCompletingStatusCode(response, configurationMaps)) {
+      final Map<String, Object> result = processResponse(job, response);
+      jobClient.newCompleteCommand(job.getKey()).variables(result).send().join();
+    } else {
+      // do nothing
+      // TODO: Would be great to extend the locking time now 
+      // as this might be used for HTTP 202 to asynchronously complete the task
+      // but not yet supported in Zeebe
+      // TODO: Also would be great to be able to add the status code here as well
+      // but currently no Zeebe API available to do this
+    }
   }
 
-  private HttpRequest buildRequest(ActivatedJob job) {
-    final ConfigurationMaps configurationMaps =
-        new ConfigurationMaps(job, environmentVariableProvider.getVariables());
-
+  private HttpRequest buildRequest(ConfigurationMaps configurationMaps) {
     final String url = getUrl(configurationMaps);
 
     final String method = getMethod(configurationMaps);
@@ -129,6 +137,25 @@ public class HttpJobHandler implements JobHandler {
     }
   }
 
+  private boolean hasFailingStatusCode(HttpResponse<String> response, ConfigurationMaps configurationMaps) {
+    String statusCode = String.valueOf(response.statusCode()).toLowerCase();
+    String statusCodePattern = configurationMaps.getString(PARAMETER_HTTP_STATUS_CODE_FAILURE).orElse("3xx, 4xx, 5xx");
+    return checkIfCodeMatches(statusCode, statusCodePattern);
+  }
+  private boolean hasCompletingStatusCode(HttpResponse<String> response, ConfigurationMaps configurationMaps) {
+    String statusCode = String.valueOf(response.statusCode()).toLowerCase();
+    String statusCodePattern = configurationMaps.getString(PARAMETER_HTTP_STATUS_CODE_COMPLETION).orElse("1xx, 2xx");
+    return checkIfCodeMatches(statusCode, statusCodePattern);
+  }
+  
+  private boolean checkIfCodeMatches(String statusCode, String matchCodePattern) {
+    return matchCodePattern.contains(statusCode)
+      || (statusCode.startsWith("1") && matchCodePattern.contains("1xx"))
+      || (statusCode.startsWith("2") && matchCodePattern.contains("2xx"))
+      || (statusCode.startsWith("3") && matchCodePattern.contains("3xx"))
+      || (statusCode.startsWith("4") && matchCodePattern.contains("4xx"));
+  }
+
   private Map<String, Object> processResponse(ActivatedJob job, HttpResponse<String> response) {
     final Map<String, Object> result = new java.util.HashMap<>();
 
@@ -139,11 +166,6 @@ public class HttpJobHandler implements JobHandler {
         .filter(body -> !body.isEmpty())
         .map(this::bodyToObject)
         .ifPresent(body -> result.put("body", body));
-
-    if (statusCode == 202) {
-      // expose the job key to allow correlation of asynchronous results
-      result.put("jobKey", job.getKey());
-    }
 
     return result;
   }

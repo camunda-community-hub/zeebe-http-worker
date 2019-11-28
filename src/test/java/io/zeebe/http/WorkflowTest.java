@@ -1,21 +1,9 @@
 package io.zeebe.http;
 
-import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
-import static com.github.tomakehurst.wiremock.client.WireMock.delete;
-import static com.github.tomakehurst.wiremock.client.WireMock.deleteRequestedFor;
-import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
-import static com.github.tomakehurst.wiremock.client.WireMock.equalToJson;
-import static com.github.tomakehurst.wiremock.client.WireMock.get;
-import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
-import static com.github.tomakehurst.wiremock.client.WireMock.post;
-import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
-import static com.github.tomakehurst.wiremock.client.WireMock.put;
-import static com.github.tomakehurst.wiremock.client.WireMock.putRequestedFor;
-import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
-import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
-import static com.github.tomakehurst.wiremock.client.WireMock.urlMatching;
+import static com.github.tomakehurst.wiremock.client.WireMock.*;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Consumer;
 
@@ -28,6 +16,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.junit4.SpringRunner;
 
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import com.github.tomakehurst.wiremock.recording.SnapshotRecordResult;
 import com.github.tomakehurst.wiremock.stubbing.Scenario;
 
 import io.zeebe.client.api.response.WorkflowInstanceEvent;
@@ -158,6 +147,8 @@ public class WorkflowTest {
             serviceTask ->
                 serviceTask
                     .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
+                    .zeebeTaskHeader("statusCodeFailure", "400,401,402,403,405")
+                    .zeebeTaskHeader("statusCodeCompletion", "404")
                     .zeebeTaskHeader("method", "GET"),
             Map.of());
 
@@ -181,11 +172,10 @@ public class WorkflowTest {
 
     WIRE_MOCK_RULE.verify(
         getRequestedFor(urlEqualTo("/api")).withHeader("Authorization", equalTo("token 123")));
-  }
+  }  
 
   @Test
   public void shouldExposeJobKeyIfStatusCode202() {
-
     stubFor(post(urlEqualTo("/api")).willReturn(aResponse().withStatus(202)));
 
     final WorkflowInstanceEvent workflowInstance =
@@ -193,19 +183,25 @@ public class WorkflowTest {
             serviceTask ->
                 serviceTask
                     .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
-                    .zeebeTaskHeader("method", "POST"),
-            Map.of("body", Map.of("x", 1)));
-
-    Record<JobRecordValue> job = RecordingExporter.jobRecords(JobIntent.CREATED)
+                    .zeebeTaskHeader("statusCodeCompletion", "200,201,203,204,205,206") // NO 202!!
+                    .zeebeTaskHeader("method", "POST")
+                    .zeebeTaskHeader("body", "{\"jobKey\":\"{{jobKey}}\"}"));
+    
+    Record<JobRecordValue> recorderJob = RecordingExporter.jobRecords(JobIntent.CREATED)
         .withWorkflowInstanceKey(workflowInstance.getWorkflowInstanceKey())
         .getFirst();
 
-    ZeebeTestRule.assertThat(workflowInstance)
-        .isEnded()
-        .hasVariable("statusCode", 202)
-        .hasVariable("jobKey", job.getKey());
-  }
+    // simulate an async callback
+    TEST_RULE.getClient().newCompleteCommand( recorderJob.getKey() ).send().join();
 
+    ZeebeTestRule.assertThat(workflowInstance).isEnded();
+
+    WIRE_MOCK_RULE.verify(
+        postRequestedFor(urlEqualTo("/api"))
+        .withRequestBody(equalToJson("{\"jobKey\":\"" + recorderJob.getKey() + "\"}")));
+
+  }
+  
   @Test
   public void shouldReplacePlaceholdersWithVariables() {
 
@@ -354,7 +350,11 @@ public class WorkflowTest {
             .withHeader("Content-Type", equalTo("application/json"))
             .withRequestBody(equalToJson("{\"y\":2}")));
   }    
-  
+
+  private WorkflowInstanceEvent createInstance(final Consumer<ServiceTaskBuilder> taskCustomizer) {
+    return createInstance(taskCustomizer, new HashMap<>());
+  }
+
   private WorkflowInstanceEvent createInstance(
       final Consumer<ServiceTaskBuilder> taskCustomizer, Map<String, Object> variables) {
 

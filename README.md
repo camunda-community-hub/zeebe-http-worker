@@ -14,6 +14,8 @@ The job in Zeebe will be marked as completed as long as the called webservice re
 
 ## Usage
 
+### BPMN Task
+
 Example BPMN with service task:
 
 ```xml
@@ -32,6 +34,9 @@ Example BPMN with service task:
   * `url` - the url to invoke
 * optional custom headers:
   * `method` - the HTTP method to use (default: `GET`, allowed:  `post` | `get` | `put` | `delete` | `patch`)
+  * `statusCodeCompletion` - Status codes that lead to completion of the service task (default: `1xx,2xx`, allowed: comma separated list of codes including 1xx, 2xx, 3xx, 4xx and 5xx)
+  * `statusCodeFailure` - Status codes that lead to the job failing  (default: `3xx,4xx,5xx`, allowed: comma separated list of codes including 1xx, 2xx, 3xx, 4xx and 5xx)
+  
 * optional variables:
   * `body` - the request body as JSON
   * `authorization` - the value of the authorization header (e.g. `token 6bac4..`)
@@ -39,11 +44,15 @@ Example BPMN with service task:
   * `statusCode` - the response status code
   * `body` - the response body, if present
 
-You can use placeholders in the form of `${PLACEHOLDER}` at all places, they will be replaced by 
+### Placeholders
+
+You can use placeholders in the form of `{{PLACEHOLDER}}` at all places, they will be replaced by 
 
 * custom headers from the BPMN model
 * Workflow variables
 * Configuration Variables from URL (see below)
+
+[Mustache](https://github.com/spullara/mustache.java) is used for replacing the placeholders, refer to their docs to check possibilities.
 
 Example:
 
@@ -52,7 +61,7 @@ Example:
   <bpmn:extensionElements>
     <zeebe:taskDefinition type="http" />
     <zeebe:taskHeaders>
-      <zeebe:header key="url" value="https://${BASE_URL}/order?id=${orderId}" />
+      <zeebe:header key="url" value="https://{{BASE_URL}}/order?id={{orderId}}" />
       <zeebe:header key="method" value="GET" />
     </zeebe:taskHeaders>
   </bpmn:extensionElements>
@@ -60,6 +69,19 @@ Example:
 ```
 
 `BASE_URL` could be configured by the configuration variables from the URL and the `orderId` might be a workflow variable.
+
+### HTTP Response codes
+
+As described you can set the `statusCodeCompletion` and `statusCodeFailure` header to control the behavior depending on the HTTP Status. If the status code is in neither of the lists Zeebe will just keep waiting in the service task, allowing for asynchronous callbacks.
+
+A common example is 
+
+* Service returns HTTP 202 (ACCEPTED)
+* Zeebe keeps waiting in the Service Task
+* Until the external service somehow returns success and invokes the Zeebe API to complete the Job at hand
+
+To allow this, the `jobKey` can be passed to the external service.
+
 
 ## Install
 
