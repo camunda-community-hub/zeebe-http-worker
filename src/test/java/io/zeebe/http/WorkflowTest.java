@@ -28,6 +28,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.junit4.SpringRunner;
 
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import com.github.tomakehurst.wiremock.stubbing.Scenario;
 
 import io.zeebe.client.api.response.WorkflowInstanceEvent;
 import io.zeebe.model.bpmn.Bpmn;
@@ -39,7 +40,9 @@ import io.zeebe.test.ZeebeTestRule;
 import io.zeebe.test.util.record.RecordingExporter;
 
 @RunWith(SpringRunner.class)
-@SpringBootTest(properties = {"ENV_VARS_URL=http://localhost:8089/config", "ENV_VARS_RELOAD_RATE=0"})
+@SpringBootTest(properties = {
+    "ENV_VARS_URL=http://localhost:8089/config", "ENV_VARS_RELOAD_RATE=0",    
+    "ENV_VARS_M2M_BASE_URL:http://localhost:8089/token", "ENV_VARS_M2M_CLIENT_ID:someClientId", "ENV_VARS_M2M_CLIENT_SECRET:someSecret", "ENV_VARS_M2M_AUDIENCE:someAudience"})
 public class WorkflowTest {
 
   @ClassRule 
@@ -50,9 +53,8 @@ public class WorkflowTest {
 
   @BeforeClass
   public static void init() {
-    stubFor(
-        get(urlEqualTo("/config"))
-            .willReturn(aResponse().withHeader("Content-Type", "application/json").withBody("{}")));
+    stubFor(get(urlEqualTo("/config")).willReturn(aResponse().withHeader("Content-Type", "application/json").withBody("{}")));
+    stubFor(post(urlEqualTo("/token")).willReturn(aResponse().withHeader("Content-Type", "application/json").withBody("{ \"token_type\": \"Bearer\", \"access_token\": \"TOKEN_123_42\" }")));                
 
     System.setProperty("zeebe.client.broker.contactPoint", TEST_RULE.getClient().getConfiguration().getBrokerContactPoint());
   }
@@ -254,16 +256,47 @@ public class WorkflowTest {
                     "{\"instanceKey\":" + workflowInstance.getWorkflowInstanceKey() + "}")));
   }
 
+  
+  // Can't currently test this, as we can't change properties after the spring container once started, so not for a single test
+  // and if moved to a seperate Test the current dynamics of the ZeebeRule do not work properly and I could not investigate that further at the moment
+//  @Test
+//  public void shouldReplacePlaceholdersWithConfigVariablesWithoutM2MToken() {
+//
+//    stubFor(
+//        get(urlEqualTo("/config"))
+//            .willReturn(
+//                aResponse()
+//                    .withHeader("Content-Type", "application/json")
+//                    .withBody("{ \"x\":1,\"y\":2}")));
+//
+//    stubFor(post(urlMatching("/api/.*")).willReturn(aResponse().withStatus(201)));
+//
+//    final WorkflowInstanceEvent workflowInstance =
+//        createInstance(
+//            serviceTask ->
+//                serviceTask
+//                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api/{{x}}")
+//                    .zeebeTaskHeader("method", "POST")
+//                    .zeebeTaskHeader("body", "{\"y\":{{y}}}"),
+//            Map.of());
+//
+//    ZeebeTestRule.assertThat(workflowInstance).isEnded().hasVariable("statusCode", 201);
+//
+//    WIRE_MOCK_RULE.verify(
+//        postRequestedFor(urlEqualTo("/api/1"))
+//            .withHeader("Content-Type", equalTo("application/json"))
+//            .withRequestBody(equalToJson("{\"y\":2}")));
+//  }
+
   @Test
-  public void shouldReplacePlaceholdersWithConfig() {
-
-    stubFor(
-        get(urlEqualTo("/config"))
-            .willReturn(
-                aResponse()
+  public void shouldReplacePlaceholdersWithConfigVariablesWithM2MToken() {
+//    WIRE_MOCK_RULE.resetAll(); // forget the defaults set in the static initializer for this test
+//    stubFor(post(urlEqualTo("/token")).willReturn(aResponse()
+//                    .withHeader("Content-Type", "application/json")
+//                    .withBody("{ \"token_type\": \"Bearer\", \"access_token\": \"TOKEN_123_42\" }")));                
+    stubFor(get(urlEqualTo("/config")).willReturn(aResponse()
                     .withHeader("Content-Type", "application/json")
-                    .withBody("{ \"x\":1,\"y\":2}")));
-
+                    .withBody("{ \"x\":1,\"y\":2}")));    
     stubFor(post(urlMatching("/api/.*")).willReturn(aResponse().withStatus(201)));
 
     final WorkflowInstanceEvent workflowInstance =
@@ -276,13 +309,52 @@ public class WorkflowTest {
             Map.of());
 
     ZeebeTestRule.assertThat(workflowInstance).isEnded().hasVariable("statusCode", 201);
-
-    WIRE_MOCK_RULE.verify(
-        postRequestedFor(urlEqualTo("/api/1"))
+    
+    // I can't check if the /token was called here, as the token is typically already cached from other test runs
+    // and I can't move this to a seperate test class because of limitations in the test support from zeebe at the moment
+    // So I check if the Authorization Header is set correctly instead
+    WIRE_MOCK_RULE.verify(getRequestedFor(urlEqualTo("/config")).withHeader("Authorization", equalTo("Bearer TOKEN_123_42")));
+    WIRE_MOCK_RULE.verify(postRequestedFor(urlEqualTo("/api/1"))
             .withHeader("Content-Type", equalTo("application/json"))
             .withRequestBody(equalToJson("{\"y\":2}")));
-  }
+  }  
+  
+  @Test
+  public void shouldReplacePlaceholdersWithConfigVariablesWithM2MTokenRefresh() {
+    // forbidden, which happens because of outdated tokens
+    stubFor(get(urlMatching("/config")).inScenario("RefreshTokenScenario")
+        .whenScenarioStateIs(Scenario.STARTED)
+        .willReturn(aResponse().withStatus(403))
+        .willSetStateTo("ALLOWED"));
+    // so a refresh should happen (already configured in the setup)
+    // then it works
+    stubFor(get(urlEqualTo("/config")).inScenario("RefreshTokenScenario")
+        .whenScenarioStateIs("ALLOWED")
+        .willReturn(aResponse().withHeader("Content-Type", "application/json").withBody("{ \"x\":1,\"y\":2}")));
+    
+    stubFor(post(urlMatching("/api/.*")).willReturn(aResponse().withStatus(201)));
 
+    final WorkflowInstanceEvent workflowInstance =
+        createInstance(
+            serviceTask ->
+                serviceTask
+                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api/{{x}}")
+                    .zeebeTaskHeader("method", "POST")
+                    .zeebeTaskHeader("body", "{\"y\":{{y}}}"),
+            Map.of());
+
+    ZeebeTestRule.assertThat(workflowInstance).isEnded().hasVariable("statusCode", 201);
+    
+    WIRE_MOCK_RULE.verify(postRequestedFor(urlEqualTo("/token"))
+            .withHeader("Content-Type", equalTo("application/json"))
+            .withHeader("Accept", equalTo("application/json"))
+            .withRequestBody(equalToJson("{\"client_id\":\"someClientId\", \"client_secret\": \"someSecret\",  \"audience\": \"someAudience\",  \"grant_type\": \"client_credentials\"}")));
+
+    WIRE_MOCK_RULE.verify(postRequestedFor(urlEqualTo("/api/1"))
+            .withHeader("Content-Type", equalTo("application/json"))
+            .withRequestBody(equalToJson("{\"y\":2}")));
+  }    
+  
   private WorkflowInstanceEvent createInstance(
       final Consumer<ServiceTaskBuilder> taskCustomizer, Map<String, Object> variables) {
 
