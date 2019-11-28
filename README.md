@@ -100,11 +100,13 @@ To allow this, the `jobKey` can be passed to the external service.
 
     `docker run camunda/zeebe-http-worker`
 
-### Build from Source
+### Readiness probes
 
-Build with Maven:
-    
-`mvn clean install`
+You can check health of the worker:
+
+  http://localhost:8080/actuator/health
+
+This uses the Spring Actuator, so other metrics are available as well
 
 ## Configuration of Zeebe Connection
 
