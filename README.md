@@ -4,6 +4,14 @@ A Zeebe worker to make HTTP calls (e.g. invoking a REST service). It is based on
 
 > Requirements: Java 11
 
+The worker subscribes to service tasks of type `CAMUNDA-HTTP`.
+
+For POST, PUT and PATCH requests, the worker will invoke the outbound REST service with a JSON payload containing all process instance variables by default. The data to be passed on can be configured via input mapping on the BPMN service task. For GET and DELETE requests, no process variables can be passed on to the outbound service yet.
+
+The data being returned by the called service (which is expected to be JSON) will be passed back to Zeebe as process instance variables. Again, this can be configuring via output mapping on the BPMN service task.
+
+The job in Zeebe will be marked as completed as long as the called webservice responds with the HTTP status code 200. Otherwise the job will be marked as failed.
+
 ## Usage
 
 Example BPMN with service task:
@@ -23,7 +31,7 @@ Example BPMN with service task:
 * required custom headers/variable:
   * `url` - the url to invoke
 * optional custom headers:
-  * `method` - the HTTP method to use (default: `GET`)
+  * `method` - the HTTP method to use (default: `GET`, allowed:  `post` | `get` | `put` | `delete` | `patch`)
 * optional variables:
   * `body` - the request body as JSON
   * `authorization` - the value of the authorization header (e.g. `token 6bac4..`)
@@ -31,25 +39,77 @@ Example BPMN with service task:
   * `statusCode` - the response status code
   * `body` - the response body, if present
 
+You can use placeholders in the form of `${PLACEHOLDER}` at all places, they will be replaced by 
+
+* custom headers from the BPMN model
+* Workflow variables
+* Configuration Variables from URL (see below)
+
+Example:
+
+```xml
+<bpmn:serviceTask id="http-get" name="stargazers check">
+  <bpmn:extensionElements>
+    <zeebe:taskDefinition type="http" />
+    <zeebe:taskHeaders>
+      <zeebe:header key="url" value="https://${BASE_URL}/order?id=${orderId}" />
+      <zeebe:header key="method" value="GET" />
+    </zeebe:taskHeaders>
+  </bpmn:extensionElements>
+</bpmn:serviceTask>
+```
+
+`BASE_URL` could be configured by the configuration variables from the URL and the `orderId` might be a workflow variable.
 
 ## Install
 
-1) Download the [JAR file](https://github.com/zeebe-io/zeebe-http-worker/releases) 
+### JAR 
 
-2) Execute the JAR via
+* Download the [JAR file](https://github.com/zeebe-io/zeebe-http-worker/releases) 
+* Execute the JAR via
 
     `java -jar target/zeebe-http-worker-{VERSION}.jar`
 
-### Configuration
+### Docker
 
-The connection can be changed by setting the environment variables:
-* `zeebe.client.broker.contactPoint` (default: `127.0.0.1:26500`).
+    `docker run camunda/zeebe-http-worker`
 
-## Build from Source
+### Build from Source
 
 Build with Maven:
     
 `mvn clean install`
+
+## Configuration of Zeebe Connection
+
+The connection to the broker Zeebe can be changed by setting the environment variables 
+
+* `zeebe.client.broker.contactPoint` (default: `127.0.0.1:26500`).
+* `zeebe.client.security.plaintext` (default: true).
+* `zeebe.worker.name` (default `http-worker`)
+
+This worker uses [Spring Zeebe]( https://github.com/zeebe-io/spring-zeebe/) underneath, so all configuration options available there are also available here.
+
+## Configuration Variables from URL
+
+You can load additional configuration values used to substitute placeholders. Therefor the worker will query an HTTP endpoint and expects a JSON back:
+
+```
+{
+  "someValue": 42",
+  "anotherValue": "42"
+}
+```
+
+To load additional config variables from an URL set these environment variables:
+
+* `ENV_VARS_URL` (e.g. `http://someUrl/config`, default: null)
+* `ENV_VARS_RELOAD_RATE` (defaullt `15000`)
+* `ENV_VARS_M2M_BASE_URL`
+* `ENV_VARS_M2M_CLIENT_ID`
+* `ENV_VARS_M2M_CLIENT_SECRET`
+* `ENV_VARS_M2M_AUDIENCE`
+
 
 ## Code of Conduct
 
