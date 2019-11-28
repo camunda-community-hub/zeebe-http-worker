@@ -223,6 +223,24 @@ public class WorkflowTest {
             .withHeader("Content-Type", equalTo("application/json"))
             .withRequestBody(equalToJson("{\"y\":2}")));
   }
+  
+  @Test
+  public void shouldReplaceLegacyPlaceholders() {
+    stubFor(post(urlMatching("/api/.*")).willReturn(aResponse().withStatus(201)));
+
+    final WorkflowInstanceEvent workflowInstance =
+        createInstance(
+            serviceTask ->
+                serviceTask
+                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api/{{x}}")
+                    .zeebeTaskHeader("method", "POST")
+                    .zeebeTaskHeader("body", "{\"y\":${y}}"),
+            Map.of("x", 1, "y", 2));
+
+    ZeebeTestRule.assertThat(workflowInstance).isEnded().hasVariable("statusCode", 201);
+    WIRE_MOCK_RULE.verify(postRequestedFor(urlEqualTo("/api/1"))
+            .withRequestBody(equalToJson("{\"y\":2}")));
+  }  
 
   @Test
   public void shouldReplacePlaceholdersWithContext() {

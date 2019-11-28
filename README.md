@@ -46,6 +46,8 @@ Example BPMN with service task:
 
 ### Placeholders
 
+**Please note that the current way of handling placeholders is subject to change in the future, especially with https://github.com/zeebe-io/zeebe/issues/3417**
+
 You can use placeholders in the form of `{{PLACEHOLDER}}` at all places, they will be replaced by 
 
 * custom headers from the BPMN model
@@ -69,6 +71,8 @@ Example:
 ```
 
 `BASE_URL` could be configured by the configuration variables from the URL and the `orderId` might be a workflow variable.
+
+To support some legacy scenarios the worker **at the moment** still also understands placeholders in the form of `${PLACEHOLDER}`. This is subject to be removed in later releases.
 
 ### HTTP Response codes
 
