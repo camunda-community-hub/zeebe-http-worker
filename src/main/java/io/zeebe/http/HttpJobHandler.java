@@ -60,7 +60,10 @@ public class HttpJobHandler implements JobHandler {
     final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
     
     if (hasFailingStatusCode(response, configurationMaps)) {
-      jobClient.newFailCommand(job.getKey()); 
+      jobClient.newFailCommand(job.getKey()) //
+      .retries(job.getRetries()-1) // simply decremenent retries for now, but we should think about it: https://github.com/zeebe-io/zeebe-http-worker/issues/22 
+      .errorMessage( "Http request failed with " + response.statusCode() + ": " + response.body() ) //
+      .send().join(); 
     } else if (hasCompletingStatusCode(response, configurationMaps)) {
       final Map<String, Object> result = processResponse(job, response);
       jobClient.newCompleteCommand(job.getKey()).variables(result).send().join();

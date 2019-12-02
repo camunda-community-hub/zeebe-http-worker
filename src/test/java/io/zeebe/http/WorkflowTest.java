@@ -1,6 +1,7 @@
 package io.zeebe.http;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
+import static org.junit.Assert.*;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -16,7 +17,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.junit4.SpringRunner;
 
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
-import com.github.tomakehurst.wiremock.recording.SnapshotRecordResult;
 import com.github.tomakehurst.wiremock.stubbing.Scenario;
 
 import io.zeebe.client.api.response.WorkflowInstanceEvent;
@@ -201,7 +201,26 @@ public class WorkflowTest {
         .withRequestBody(equalToJson("{\"jobKey\":\"" + recorderJob.getKey() + "\"}")));
 
   }
-  
+
+  @Test
+  public void failOnHttpStatus400() {
+    stubFor(post(urlEqualTo("/api")).willReturn(aResponse().withStatus(400)));
+
+    final WorkflowInstanceEvent workflowInstance =
+        createInstance(
+            serviceTask ->
+                serviceTask
+                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
+                    .zeebeTaskHeader("method", "POST"));
+    
+    Record<JobRecordValue> recorderJob = RecordingExporter.jobRecords(JobIntent.FAILED)
+        .withWorkflowInstanceKey(workflowInstance.getWorkflowInstanceKey())
+        .getFirst();
+    
+    assertNotNull(recorderJob.getValue().getErrorMessage());
+    assertTrue("Error message contains status code 400: " + recorderJob.getValue().getErrorMessage(), recorderJob.getValue().getErrorMessage().contains("failed with 400"));     
+  }
+
   @Test
   public void shouldReplacePlaceholdersWithVariables() {
 
