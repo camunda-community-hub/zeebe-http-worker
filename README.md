@@ -4,14 +4,6 @@ A Zeebe worker to make HTTP calls (e.g. invoking a REST service). It is based on
 
 > Requirements: Java 11
 
-The worker subscribes to service tasks of type `CAMUNDA-HTTP`.
-
-For POST, PUT and PATCH requests, the worker will invoke the outbound REST service with a JSON payload containing all process instance variables by default. The data to be passed on can be configured via input mapping on the BPMN service task. For GET and DELETE requests, no process variables can be passed on to the outbound service yet.
-
-The data being returned by the called service (which is expected to be JSON) will be passed back to Zeebe as process instance variables. Again, this can be configuring via output mapping on the BPMN service task.
-
-The job in Zeebe will be marked as completed as long as the called webservice responds with the HTTP status code 200. Otherwise the job will be marked as failed.
-
 ## Usage
 
 ### BPMN Task
@@ -46,7 +38,7 @@ Example BPMN with service task:
 
 ### Placeholders
 
-**Please note that the current way of handling placeholders is subject to change in the future, especially with https://github.com/zeebe-io/zeebe/issues/3417**
+> Please note that the current way of handling placeholders is subject to change in the future, especially with https://github.com/zeebe-io/zeebe/issues/3417.
 
 You can use placeholders in the form of `{{PLACEHOLDER}}` at all places, they will be replaced by 
 
