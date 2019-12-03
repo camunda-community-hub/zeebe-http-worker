@@ -21,6 +21,10 @@ import java.util.concurrent.CountDownLatch;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.web.embedded.tomcat.TomcatServletWebServerFactory;
+import org.springframework.boot.web.servlet.server.ServletWebServerFactory;
+import org.springframework.boot.web.servlet.support.SpringBootServletInitializer;
+import org.springframework.context.annotation.Bean;
 
 import io.zeebe.client.api.response.ActivatedJob;
 import io.zeebe.client.api.worker.JobClient;
@@ -29,7 +33,7 @@ import io.zeebe.spring.client.annotation.ZeebeWorker;
 
 @SpringBootApplication
 @EnableZeebeClient
-public class ZeebeHttpWorkerApplication {
+public class ZeebeHttpWorkerApplication extends SpringBootServletInitializer {
 
   public static void main(String[] args) {
     SpringApplication.run(ZeebeHttpWorkerApplication.class, args);
@@ -37,6 +41,14 @@ public class ZeebeHttpWorkerApplication {
       new CountDownLatch(1).await();
     } catch (InterruptedException e) {
     }
+  }
+
+  /**
+   * Required to add web depdencies to UBER jar, which we need to get the Actuator working to provide some statistics
+   */
+  @Bean 
+  ServletWebServerFactory servletWebServerFactory(){
+    return new TomcatServletWebServerFactory();
   }
   
   @Autowired
