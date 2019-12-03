@@ -123,10 +123,16 @@ This worker uses [Spring Zeebe]( https://github.com/zeebe-io/spring-zeebe/) unde
 You can load additional configuration values used to substitute placeholders. Therefor the worker will query an HTTP endpoint and expects a JSON back:
 
 ```
-{
-  "someValue": 42",
-  "anotherValue": "42"
-}
+[
+  {
+    "key": "someValue",
+    "value": 42
+  },
+  {
+    "key": "anotherValue",
+    "value": 42
+  }
+]
 ```
 
 To load additional config variables from an URL set these environment variables:

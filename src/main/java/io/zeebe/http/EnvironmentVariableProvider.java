@@ -10,11 +10,14 @@ import java.net.http.HttpResponse.BodyHandlers;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -40,6 +43,11 @@ public class EnvironmentVariableProvider {
 
   private Instant lastUpdate = Instant.MIN;
   private Map<String, String> cachedVariables = null;
+  
+  private static class WorkerVariable {
+    public String key;
+    public String value;
+  }
   
   public Map<String, String> getVariables() {
     // only read if environment variable is set, otherwise return empty map
@@ -70,8 +78,13 @@ public class EnvironmentVariableProvider {
       String jsonResponse = httpResponse.body();
 
       lastUpdate = Instant.now();
-      cachedVariables = objectMapper.readValue(jsonResponse, Map.class);
+      cachedVariables = new HashMap<String, String>();
 
+      List<WorkerVariable> variables = objectMapper.readValue(jsonResponse, new TypeReference<List<WorkerVariable>>(){});
+      for (WorkerVariable workerVariable : variables) {
+        cachedVariables.put(workerVariable.key, workerVariable.value);
+      }
+      
       return cachedVariables;
     } catch (Exception e) {
       throw new RuntimeException(

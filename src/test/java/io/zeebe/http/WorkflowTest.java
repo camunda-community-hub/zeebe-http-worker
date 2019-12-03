@@ -42,7 +42,7 @@ public class WorkflowTest {
 
   @BeforeClass
   public static void init() {
-    stubFor(get(urlEqualTo("/config")).willReturn(aResponse().withHeader("Content-Type", "application/json").withBody("{}")));
+    stubFor(get(urlEqualTo("/config")).willReturn(aResponse().withHeader("Content-Type", "application/json").withBody("[]")));
     stubFor(post(urlEqualTo("/token")).willReturn(aResponse().withHeader("Content-Type", "application/json").withBody("{ \"token_type\": \"Bearer\", \"access_token\": \"TOKEN_123_42\" }")));                
 
     System.setProperty("zeebe.client.broker.contactPoint", TEST_RULE.getClient().getConfiguration().getBrokerContactPoint());
@@ -300,7 +300,7 @@ public class WorkflowTest {
 //            .willReturn(
 //                aResponse()
 //                    .withHeader("Content-Type", "application/json")
-//                    .withBody("{ \"x\":1,\"y\":2}")));
+//                    .withBody("{ \"x\":1,\"y\":2}"))); CHANGE to new format
 //
 //    stubFor(post(urlMatching("/api/.*")).willReturn(aResponse().withStatus(201)));
 //
@@ -329,7 +329,7 @@ public class WorkflowTest {
 //                    .withBody("{ \"token_type\": \"Bearer\", \"access_token\": \"TOKEN_123_42\" }")));                
     stubFor(get(urlEqualTo("/config")).willReturn(aResponse()
                     .withHeader("Content-Type", "application/json")
-                    .withBody("{ \"x\":1,\"y\":2}")));    
+                    .withBody("[ {\"key\": \"x\", \"value\":1},  {\"key\":\"y\", \"value\":2} ]")));    
     stubFor(post(urlMatching("/api/.*")).willReturn(aResponse().withStatus(201)));
 
     final WorkflowInstanceEvent workflowInstance =
@@ -363,7 +363,8 @@ public class WorkflowTest {
     // then it works
     stubFor(get(urlEqualTo("/config")).inScenario("RefreshTokenScenario")
         .whenScenarioStateIs("ALLOWED")
-        .willReturn(aResponse().withHeader("Content-Type", "application/json").withBody("{ \"x\":1,\"y\":2}")));
+        .willReturn(aResponse().withHeader("Content-Type", "application/json") 
+        .withBody("[ {\"key\": \"x\", \"value\":1},  {\"key\":\"y\", \"value\":2} ]")));    
     
     stubFor(post(urlMatching("/api/.*")).willReturn(aResponse().withStatus(201)));
 
