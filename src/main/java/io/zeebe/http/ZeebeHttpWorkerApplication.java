@@ -42,14 +42,6 @@ public class ZeebeHttpWorkerApplication extends SpringBootServletInitializer {
     } catch (InterruptedException e) {
     }
   }
-
-  /**
-   * Required to add web depdencies to UBER jar, which we need to get the Actuator working to provide some statistics
-   */
-  @Bean 
-  ServletWebServerFactory servletWebServerFactory(){
-    return new TomcatServletWebServerFactory();
-  }
   
   @Autowired
   private HttpJobHandler jobHandler;
