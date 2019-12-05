@@ -104,9 +104,9 @@ This uses the Spring Actuator, so other metrics are available as well
 
 The connection to the broker Zeebe can be changed by setting the environment variables 
 
-* `zeebe.client.broker.contactPoint` (default: `127.0.0.1:26500`).
-* `zeebe.client.security.plaintext` (default: true).
-* `zeebe.worker.name` (default `http-worker`)
+* `ZEEBE_CLIENT_BROKER_CONTACTPOINT` (default: `127.0.0.1:26500`).
+* `ZEEBE_CLIENT_SECURITY_PLAINTEXT` (default: true).
+* `ZEEBE_WORKER_NAME` (default `http-worker`)
 
 This worker uses [Spring Zeebe]( https://github.com/zeebe-io/spring-zeebe/) underneath, so all configuration options available there are also available here.
 
@@ -130,7 +130,7 @@ You can load additional configuration values used to substitute placeholders. Th
 To load additional config variables from an URL set these environment variables:
 
 * `ENV_VARS_URL` (e.g. `http://someUrl/config`, default: null)
-* `ENV_VARS_RELOAD_RATE` (defaullt `15000`)
+* `ENV_VARS_RELOAD_RATE` (default `15000`)
 * `ENV_VARS_M2M_BASE_URL`
 * `ENV_VARS_M2M_CLIENT_ID`
 * `ENV_VARS_M2M_CLIENT_SECRET`
