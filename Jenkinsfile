@@ -143,6 +143,7 @@ spec:
         }
 
         container('docker') {
+            sh 'docker build -t camunda/zeebe-http-worker:SNAPSHOT .'
             sh 'docker tag camunda/zeebe-http-worker:SNAPSHOT camunda/zeebe-http-worker:${RELEASE_VERSION}'
             sh 'docker push camunda/zeebe-http-worker:${RELEASE_VERSION}'
             sh 'docker tag camunda/zeebe-http-worker:SNAPSHOT camunda/zeebe-http-worker:latest'
