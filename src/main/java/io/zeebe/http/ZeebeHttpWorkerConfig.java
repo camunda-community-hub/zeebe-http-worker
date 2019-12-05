@@ -5,27 +5,25 @@ import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 
-import com.google.gson.JsonObject;
-
 @Configuration
 public class ZeebeHttpWorkerConfig {
  
-  @Value( "${ENV_VARS_URL:null}" )
+  @Value( "${ENV_VARS_URL:#{null}}" )
   private String environmentVariablesUrl;
 
   @Value( "${ENV_VARS_RELOAD_RATE:15000}" )  
-  private long environmentVariablesReloadIntervalMs;
+  private Integer environmentVariablesReloadIntervalMs;
   
-  @Value( "${ENV_VARS_M2M_BASE_URL:null}" )
+  @Value( "${ENV_VARS_M2M_BASE_URL:#{null}}" )
   private String environmentVariablesM2mBaseUrl;
   
-  @Value( "${ENV_VARS_M2M_CLIENT_ID:null}" )
+  @Value( "${ENV_VARS_M2M_CLIENT_ID:#{null}}" )
   private String environmentVariablesM2mClientId;
   
-  @Value( "${ENV_VARS_M2M_CLIENT_SECRET:null}" )
+  @Value( "${ENV_VARS_M2M_CLIENT_SECRET:@null}" )
   private String environmentVariablesM2mClientSecret;
   
-  @Value( "${ENV_VARS_M2M_AUDIENCE:null}")
+  @Value( "${ENV_VARS_M2M_AUDIENCE:#{null}}")
   private String environmentVariablesM2mAudience;  
 
   public boolean isEnvironmentVariableUrlSet() {
