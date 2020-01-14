@@ -10,7 +10,7 @@
     <parent>
         <groupId>org.camunda</groupId>
         <artifactId>camunda-release-parent</artifactId>
-        <version>2.5</version>
+        <version>3.7</version>
         <!-- do not remove empty tag - http://jira.codehaus.org/browse/MNG-4687 -->
         <relativePath />
     </parent>
@@ -18,7 +18,7 @@
     <properties>
         <version.zeebe>0.22.0</version.zeebe>
         <version.zeebe.spring>0.22.0</version.zeebe.spring>
-        <version.spring.boot>2.2.1.RELEASE</version.spring.boot>
+        <version.spring.boot>2.2.2.RELEASE</version.spring.boot>
 
         <!-- release parent settings -->
         <version.java>11</version.java>
