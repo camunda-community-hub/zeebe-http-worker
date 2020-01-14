@@ -4,7 +4,7 @@
     <name>Zeebe HTTP Worker</name>
     <groupId>io.zeebe</groupId>
     <artifactId>zeebe-http-worker</artifactId>
-    <version>0.21.0-SNAPSHOT</version>
+    <version>0.22.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
     <parent>
@@ -16,7 +16,8 @@
     </parent>
 
     <properties>
-        <version.zeebe>0.21.1</version.zeebe>
+        <version.zeebe>0.22.0</version.zeebe>
+        <version.zeebe.spring>0.22.0</version.zeebe.spring>
         <version.spring.boot>2.2.1.RELEASE</version.spring.boot>
 
         <!-- release parent settings -->
@@ -53,7 +54,7 @@
 		<dependency>
 			<groupId>io.zeebe.spring</groupId>
 			<artifactId>spring-zeebe-starter</artifactId>
-			<version>0.7.1</version>
+			<version>${version.zeebe.spring}</version>
 		</dependency>
 	    <dependency>
 	      <groupId>org.springframework.boot</groupId>

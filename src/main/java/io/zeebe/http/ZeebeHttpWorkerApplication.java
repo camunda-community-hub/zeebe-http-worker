@@ -49,7 +49,7 @@ public class ZeebeHttpWorkerApplication extends SpringBootServletInitializer {
   // This code does not limit the variables resolves
   // That means the worker always fetches all variables to support expressions/placeholders
   // as a workaround until https://github.com/zeebe-io/zeebe/issues/3417 is there
-  @ZeebeWorker(type = "http")
+  @ZeebeWorker
   public void handleFooJob(final JobClient client, final ActivatedJob job) throws IOException, InterruptedException {
     jobHandler.handle(client, job);
   }  
