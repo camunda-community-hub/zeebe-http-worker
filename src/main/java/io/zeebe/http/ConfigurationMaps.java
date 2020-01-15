@@ -35,7 +35,8 @@ public class ConfigurationMaps {
     this.variables = job.getVariablesAsMap();
     this.environmentVariables = environmentVariables;
 
-    config = new HashMap<>(customHeaders);
+    config = new HashMap<>();
+    config.putAll(customHeaders);
     config.putAll(variables);
     config.putAll(environmentVariables);
 
@@ -44,9 +45,7 @@ public class ConfigurationMaps {
   }
 
   public Optional<Object> get(String key) {
-    return Optional.<Object>ofNullable(customHeaders.get(key))
-        .or(() -> Optional.ofNullable(variables.get(key)))
-        .or(() -> Optional.ofNullable(environmentVariables.get(key)));
+    return Optional.<Object>ofNullable(config.get(key));
   }
 
   public Optional<String> getString(String key) {
