@@ -23,6 +23,10 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -37,6 +41,10 @@ import io.zeebe.client.api.worker.JobHandler;
 @Component
 public class HttpJobHandler implements JobHandler {
 
+  public static Duration CONNECTION_TIMEOUT = Duration.ofMinutes(1);
+  public static long RESPONSE_TIMEOUT_VALUE = 60;
+  public static TimeUnit RESPONSE_TIMEOUT_TIME_UNIT = TimeUnit.SECONDS;
+  
   private static final String PARAMETER_URL = "url";
   private static final String PARAMETER_METHOD = "method";
   private static final String PARAMETER_BODY = "body";
@@ -52,12 +60,13 @@ public class HttpJobHandler implements JobHandler {
   private EnvironmentVariableProvider environmentVariableProvider;
 
   @Override
-  public void handle(JobClient jobClient, ActivatedJob job) throws IOException, InterruptedException {
+  public void handle(JobClient jobClient, ActivatedJob job) throws IOException, InterruptedException, ExecutionException, TimeoutException {
 
     final ConfigurationMaps configurationMaps = new ConfigurationMaps(job, environmentVariableProvider.getVariables());
     final HttpRequest request = buildRequest(configurationMaps);
 
-    final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+    CompletableFuture<HttpResponse<String>> requestFuture = client.sendAsync(request, HttpResponse.BodyHandlers.ofString());
+    final HttpResponse<String> response = requestFuture.get(RESPONSE_TIMEOUT_VALUE, RESPONSE_TIMEOUT_TIME_UNIT);
     
     if (hasFailingStatusCode(response, configurationMaps)) {
       jobClient.newFailCommand(job.getKey()) //
@@ -86,7 +95,7 @@ public class HttpJobHandler implements JobHandler {
     final HttpRequest.Builder builder =
         HttpRequest.newBuilder()
             .uri(URI.create(url))
-            .timeout(Duration.ofMinutes(1))
+            .timeout(CONNECTION_TIMEOUT)
             .header("Content-Type", "application/json")
             .header("Accept", "application/json")
             .method(method, bodyPublisher);

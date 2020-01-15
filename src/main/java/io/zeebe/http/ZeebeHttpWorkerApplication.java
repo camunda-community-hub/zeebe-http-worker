@@ -17,14 +17,13 @@ package io.zeebe.http;
 
 import java.io.IOException;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.boot.web.embedded.tomcat.TomcatServletWebServerFactory;
-import org.springframework.boot.web.servlet.server.ServletWebServerFactory;
 import org.springframework.boot.web.servlet.support.SpringBootServletInitializer;
-import org.springframework.context.annotation.Bean;
 
 import io.zeebe.client.api.response.ActivatedJob;
 import io.zeebe.client.api.worker.JobClient;
@@ -50,7 +49,7 @@ public class ZeebeHttpWorkerApplication extends SpringBootServletInitializer {
   // That means the worker always fetches all variables to support expressions/placeholders
   // as a workaround until https://github.com/zeebe-io/zeebe/issues/3417 is there
   @ZeebeWorker
-  public void handleFooJob(final JobClient client, final ActivatedJob job) throws IOException, InterruptedException {
+  public void handleFooJob(final JobClient client, final ActivatedJob job) throws IOException, InterruptedException, ExecutionException, TimeoutException {
     jobHandler.handle(client, job);
   }  
 }

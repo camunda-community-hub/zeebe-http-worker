@@ -155,6 +155,50 @@ public class WorkflowTest {
 
     ZeebeTestRule.assertThat(workflowInstance).isEnded().hasVariable("statusCode", 404);
   }
+  
+
+  @Test
+  public void testGetRequestDelayedResponse() throws InterruptedException {
+    long originalResponseTimeout = HttpJobHandler.RESPONSE_TIMEOUT_VALUE; 
+    try {
+      HttpJobHandler.RESPONSE_TIMEOUT_VALUE = 2; // 2 seconds
+      
+      stubFor(
+          get(urlEqualTo("/api")).inScenario("DelayedResponseLeadToTimeoutScenario")
+          .whenScenarioStateIs(Scenario.STARTED)
+          .willReturn(
+              aResponse()
+                .withHeader("Content-Type", "application/json").withBody("{\"x\":1}")
+                .withFixedDelay(3 * 1000))
+          .willSetStateTo("WORKS_NOW"));
+      // second time it works
+      stubFor(
+          get(urlEqualTo("/api")).inScenario("DelayedResponseLeadToTimeoutScenario")
+          .whenScenarioStateIs("WORKS_NOW")
+          .willReturn(aResponse().withHeader("Content-Type", "application/json").withBody("{\"x\":1}")));
+      
+  
+      final WorkflowInstanceEvent workflowInstance =
+          createInstance(
+              serviceTask ->
+                  serviceTask
+                      .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
+                      .zeebeTaskHeader("method", "GET")
+                      .zeebeTaskRetries(3),
+              Collections.emptyMap());
+      
+      // TODO: Think about a better way of doing this :-)
+      Thread.sleep(3 * 1000);
+      
+      ZeebeTestRule.assertThat(workflowInstance)
+          .isEnded();
+  
+      WIRE_MOCK_RULE.verify(2, getRequestedFor(urlEqualTo("/api")));
+    } finally {
+      HttpJobHandler.RESPONSE_TIMEOUT_VALUE = originalResponseTimeout;      
+    }
+  }
+  
 
   @Test
   public void testAuthorizationHeader() {
