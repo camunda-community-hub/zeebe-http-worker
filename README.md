@@ -106,7 +106,8 @@ The connection to the broker Zeebe can be changed by setting the environment var
 
 * `ZEEBE_CLIENT_BROKER_CONTACTPOINT` (default: `127.0.0.1:26500`).
 * `ZEEBE_CLIENT_SECURITY_PLAINTEXT` (default: true).
-* `ZEEBE_WORKER_NAME` (default `http-worker`)
+* `ZEEBE_WORKER_DEFAULTNAME` (default `http-worker`)
+* `ZEEBE_WORKER_DEFAULTTYPE` (default `http`)
 
 This worker uses [Spring Zeebe]( https://github.com/zeebe-io/spring-zeebe/) underneath, so all configuration options available there are also available here.
 
