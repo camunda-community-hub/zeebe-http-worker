@@ -14,6 +14,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import javax.annotation.PostConstruct;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -49,6 +51,7 @@ public class EnvironmentVariableProvider {
     public String value;
   }
   
+  @PostConstruct // Make sure that variable URL is already checked during worker startup
   public Map<String, String> getVariables() {
     // only read if environment variable is set, otherwise return empty map
     if (!config.isEnvironmentVariableUrlSet()) {
@@ -80,7 +83,10 @@ public class EnvironmentVariableProvider {
       lastUpdate = Instant.now();
       cachedVariables = new HashMap<String, String>();
 
-      List<WorkerVariable> variables = objectMapper.readValue(jsonResponse, new TypeReference<List<WorkerVariable>>(){});
+      List<WorkerVariable> variables = new ArrayList<>();
+      if (jsonResponse!=null && !jsonResponse.isBlank()) {
+        variables = objectMapper.readValue(jsonResponse, new TypeReference<List<WorkerVariable>>(){});
+      }
       for (WorkerVariable workerVariable : variables) {
         cachedVariables.put(workerVariable.key, workerVariable.value);
       }
