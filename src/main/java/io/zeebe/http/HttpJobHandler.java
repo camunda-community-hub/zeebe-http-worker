@@ -55,6 +55,7 @@ public class HttpJobHandler implements JobHandler {
   private final HttpClient client = HttpClient.newHttpClient();
   private final ObjectMapper objectMapper = new ObjectMapper();
   private final PlaceholderProcessor placeholderProcessor = new PlaceholderProcessor();
+  private final JSONizer jsoNizer = new JSONizer();
 
   @Autowired
   private EnvironmentVariableProvider environmentVariableProvider;
@@ -63,6 +64,7 @@ public class HttpJobHandler implements JobHandler {
   public void handle(JobClient jobClient, ActivatedJob job) throws IOException, InterruptedException, ExecutionException, TimeoutException {
 
     final ConfigurationMaps configurationMaps = new ConfigurationMaps(job, environmentVariableProvider.getVariables());
+    configurationMaps.getConfig().put("body", this.jsoNizer.deepMerge(job.getCustomHeaders(), job.getVariablesAsMap()));
     final HttpRequest request = buildRequest(configurationMaps);
 
     CompletableFuture<HttpResponse<String>> requestFuture = client.sendAsync(request, HttpResponse.BodyHandlers.ofString());
@@ -70,7 +72,7 @@ public class HttpJobHandler implements JobHandler {
     
     if (hasFailingStatusCode(response, configurationMaps)) {
       jobClient.newFailCommand(job.getKey()) //
-      .retries(job.getRetries()-1) // simply decremenent retries for now, but we should think about it: https://github.com/zeebe-io/zeebe-http-worker/issues/22 
+      .retries(job.getRetries()-1) // simply decrement retries for now, but we should think about it: https://github.com/zeebe-io/zeebe-http-worker/issues/22
       .errorMessage( "Http request failed with " + response.statusCode() + ": " + response.body() ) //
       .send().join(); 
     } else if (hasCompletingStatusCode(response, configurationMaps)) {
