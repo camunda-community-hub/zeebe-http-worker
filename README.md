@@ -28,6 +28,8 @@ Example BPMN with service task:
   * `method` - the HTTP method to use (default: `GET`, allowed:  `post` | `get` | `put` | `delete` | `patch`)
   * `statusCodeCompletion` - Status codes that lead to completion of the service task (default: `1xx,2xx`, allowed: comma separated list of codes including 1xx, 2xx, 3xx, 4xx and 5xx)
   * `statusCodeFailure` - Status codes that lead to the job failing  (default: `3xx,4xx,5xx`, allowed: comma separated list of codes including 1xx, 2xx, 3xx, 4xx and 5xx)
+  * `errorCodePath` - Variable expression (dot notation) applied over a failed response body to throw a Zeebe error. If the value can't be found or this headers isn't configured, the job fails.
+  * `errorMessagePath` - Variable expression (dot notation) applied over a failed response body to extract a custom error message.
   
 * optional variables:
   * `body` - the request body as JSON

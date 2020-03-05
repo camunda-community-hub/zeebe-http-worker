@@ -267,6 +267,92 @@ public class WorkflowTest {
   }
 
   @Test
+  public void throwErrorCodeWithMessageOnFailure() {
+    stubFor(post(urlEqualTo("/api")).willReturn(aResponse().withStatus(400).withBody("{\"error\":{\"code\":\"some-code\",\"message\":\"some message\"}}")));
+
+    final WorkflowInstanceEvent workflowInstance =
+        createInstance(
+            serviceTask ->
+                serviceTask
+                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
+                    .zeebeTaskHeader("errorCodePath", "error.code")
+                    .zeebeTaskHeader("errorMessagePath", "error.message")
+                    .zeebeTaskHeader("method", "POST"));
+
+    Record<JobRecordValue> recorderJob = RecordingExporter.jobRecords(JobIntent.ERROR_THROWN)
+        .withWorkflowInstanceKey(workflowInstance.getWorkflowInstanceKey())
+        .getFirst();
+
+    assertNotNull(recorderJob.getValue().getErrorCode());
+    assertEquals("some-code", recorderJob.getValue().getErrorCode());
+    assertEquals("some message", recorderJob.getValue().getErrorMessage());
+  }
+
+  @Test
+  public void throwErrorCodeWithEmptyMessageOnFailure() {
+    stubFor(post(urlEqualTo("/api")).willReturn(aResponse().withStatus(400).withBody("{\"error\":{\"code\":\"some-code\"}}")));
+
+    final WorkflowInstanceEvent workflowInstance =
+        createInstance(
+            serviceTask ->
+                serviceTask
+                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
+                    .zeebeTaskHeader("errorCodePath", "error.code")
+                    .zeebeTaskHeader("errorMessagePath", "error.message")
+                    .zeebeTaskHeader("method", "POST"));
+
+    Record<JobRecordValue> recorderJob = RecordingExporter.jobRecords(JobIntent.ERROR_THROWN)
+        .withWorkflowInstanceKey(workflowInstance.getWorkflowInstanceKey())
+        .getFirst();
+
+    assertNotNull(recorderJob.getValue().getErrorCode());
+    assertEquals("some-code", recorderJob.getValue().getErrorCode());
+    assertTrue("Error message contains status code 400: " + recorderJob.getValue().getErrorMessage(), recorderJob.getValue().getErrorMessage().contains("failed with 400"));
+  }
+
+  @Test
+  public void failIfErrorCodeIsNotPresent() {
+    stubFor(post(urlEqualTo("/api")).willReturn(aResponse().withStatus(400).withBody("{\"error\":{\"message\":\"some message\"}}")));
+
+    final WorkflowInstanceEvent workflowInstance =
+        createInstance(
+            serviceTask ->
+                serviceTask
+                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
+                    .zeebeTaskHeader("errorCodePath", "error.code")
+                    .zeebeTaskHeader("errorMessagePath", "error.message")
+                    .zeebeTaskHeader("method", "POST"));
+
+    Record<JobRecordValue> recorderJob = RecordingExporter.jobRecords(JobIntent.FAILED)
+        .withWorkflowInstanceKey(workflowInstance.getWorkflowInstanceKey())
+        .getFirst();
+
+    assertNotNull(recorderJob.getValue().getErrorMessage());
+    assertEquals("some message", recorderJob.getValue().getErrorMessage());
+  }
+
+  @Test
+  public void failIfBodyIsNotValidJson() {
+    stubFor(post(urlEqualTo("/api")).willReturn(aResponse().withStatus(400).withBody("{error.code = some code}")));
+
+    final WorkflowInstanceEvent workflowInstance =
+        createInstance(
+            serviceTask ->
+                serviceTask
+                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
+                    .zeebeTaskHeader("errorCodePath", "error.code")
+                    .zeebeTaskHeader("errorMessagePath", "error.message")
+                    .zeebeTaskHeader("method", "POST"));
+
+    Record<JobRecordValue> recorderJob = RecordingExporter.jobRecords(JobIntent.FAILED)
+        .withWorkflowInstanceKey(workflowInstance.getWorkflowInstanceKey())
+        .getFirst();
+
+    assertNotNull(recorderJob.getValue().getErrorMessage());
+    assertTrue("Error message contains status code 400: " + recorderJob.getValue().getErrorMessage(), recorderJob.getValue().getErrorMessage().contains("failed with 400"));
+  }
+
+  @Test
   public void shouldReplacePlaceholdersWithVariables() {
 
     stubFor(post(urlMatching("/api/.*")).willReturn(aResponse().withStatus(201)));
