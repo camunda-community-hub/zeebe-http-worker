@@ -1,7 +1,7 @@
 package io.zeebe.http;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
-import static org.junit.Assert.*;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -262,8 +262,7 @@ public class WorkflowTest {
         .withWorkflowInstanceKey(workflowInstance.getWorkflowInstanceKey())
         .getFirst();
     
-    assertNotNull(recorderJob.getValue().getErrorMessage());
-    assertTrue("Error message contains status code 400: " + recorderJob.getValue().getErrorMessage(), recorderJob.getValue().getErrorMessage().contains("failed with 400"));     
+    assertThat(recorderJob.getValue().getErrorMessage()).isNotNull().contains("failed with 400");
   }
 
   @Test
@@ -283,9 +282,8 @@ public class WorkflowTest {
         .withWorkflowInstanceKey(workflowInstance.getWorkflowInstanceKey())
         .getFirst();
 
-    assertNotNull(recorderJob.getValue().getErrorCode());
-    assertEquals("some-code", recorderJob.getValue().getErrorCode());
-    assertEquals("some message", recorderJob.getValue().getErrorMessage());
+    assertThat(recorderJob.getValue().getErrorCode()).isNotNull().isEqualTo("some-code");
+    assertThat(recorderJob.getValue().getErrorMessage()).isNotNull().isEqualTo("some message");
   }
 
   @Test
@@ -305,9 +303,8 @@ public class WorkflowTest {
         .withWorkflowInstanceKey(workflowInstance.getWorkflowInstanceKey())
         .getFirst();
 
-    assertNotNull(recorderJob.getValue().getErrorCode());
-    assertEquals("some-code", recorderJob.getValue().getErrorCode());
-    assertTrue("Error message contains status code 400: " + recorderJob.getValue().getErrorMessage(), recorderJob.getValue().getErrorMessage().contains("failed with 400"));
+    assertThat(recorderJob.getValue().getErrorCode()).isNotNull().isEqualTo("some-code");
+    assertThat(recorderJob.getValue().getErrorMessage()).isNotNull().contains("failed with 400");
   }
 
   @Test
@@ -327,8 +324,7 @@ public class WorkflowTest {
         .withWorkflowInstanceKey(workflowInstance.getWorkflowInstanceKey())
         .getFirst();
 
-    assertNotNull(recorderJob.getValue().getErrorMessage());
-    assertEquals("some message", recorderJob.getValue().getErrorMessage());
+    assertThat(recorderJob.getValue().getErrorMessage()).isNotNull().contains("some message");
   }
 
   @Test
@@ -348,8 +344,7 @@ public class WorkflowTest {
         .withWorkflowInstanceKey(workflowInstance.getWorkflowInstanceKey())
         .getFirst();
 
-    assertNotNull(recorderJob.getValue().getErrorMessage());
-    assertTrue("Error message contains status code 400: " + recorderJob.getValue().getErrorMessage(), recorderJob.getValue().getErrorMessage().contains("failed with 400"));
+    assertThat(recorderJob.getValue().getErrorMessage()).isNotNull().contains("failed with 400");
   }
 
   @Test
