@@ -1,7 +1,7 @@
 package io.zeebe.http;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
-import static org.junit.Assert.*;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -262,8 +262,89 @@ public class WorkflowTest {
         .withWorkflowInstanceKey(workflowInstance.getWorkflowInstanceKey())
         .getFirst();
     
-    assertNotNull(recorderJob.getValue().getErrorMessage());
-    assertTrue("Error message contains status code 400: " + recorderJob.getValue().getErrorMessage(), recorderJob.getValue().getErrorMessage().contains("failed with 400"));     
+    assertThat(recorderJob.getValue().getErrorMessage()).isNotNull().contains("failed with 400");
+  }
+
+  @Test
+  public void throwErrorCodeWithMessageOnFailure() {
+    stubFor(post(urlEqualTo("/api")).willReturn(aResponse().withStatus(400).withBody("{\"error\":{\"code\":\"some-code\",\"message\":\"some message\"}}")));
+
+    final WorkflowInstanceEvent workflowInstance =
+        createInstance(
+            serviceTask ->
+                serviceTask
+                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
+                    .zeebeTaskHeader("errorCodePath", "error.code")
+                    .zeebeTaskHeader("errorMessagePath", "error.message")
+                    .zeebeTaskHeader("method", "POST"));
+
+    Record<JobRecordValue> recorderJob = RecordingExporter.jobRecords(JobIntent.ERROR_THROWN)
+        .withWorkflowInstanceKey(workflowInstance.getWorkflowInstanceKey())
+        .getFirst();
+
+    assertThat(recorderJob.getValue().getErrorCode()).isNotNull().isEqualTo("some-code");
+    assertThat(recorderJob.getValue().getErrorMessage()).isNotNull().isEqualTo("some message");
+  }
+
+  @Test
+  public void throwErrorCodeWithEmptyMessageOnFailure() {
+    stubFor(post(urlEqualTo("/api")).willReturn(aResponse().withStatus(400).withBody("{\"error\":{\"code\":\"some-code\"}}")));
+
+    final WorkflowInstanceEvent workflowInstance =
+        createInstance(
+            serviceTask ->
+                serviceTask
+                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
+                    .zeebeTaskHeader("errorCodePath", "error.code")
+                    .zeebeTaskHeader("errorMessagePath", "error.message")
+                    .zeebeTaskHeader("method", "POST"));
+
+    Record<JobRecordValue> recorderJob = RecordingExporter.jobRecords(JobIntent.ERROR_THROWN)
+        .withWorkflowInstanceKey(workflowInstance.getWorkflowInstanceKey())
+        .getFirst();
+
+    assertThat(recorderJob.getValue().getErrorCode()).isNotNull().isEqualTo("some-code");
+    assertThat(recorderJob.getValue().getErrorMessage()).isNotNull().contains("failed with 400");
+  }
+
+  @Test
+  public void failIfErrorCodeIsNotPresent() {
+    stubFor(post(urlEqualTo("/api")).willReturn(aResponse().withStatus(400).withBody("{\"error\":{\"message\":\"some message\"}}")));
+
+    final WorkflowInstanceEvent workflowInstance =
+        createInstance(
+            serviceTask ->
+                serviceTask
+                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
+                    .zeebeTaskHeader("errorCodePath", "error.code")
+                    .zeebeTaskHeader("errorMessagePath", "error.message")
+                    .zeebeTaskHeader("method", "POST"));
+
+    Record<JobRecordValue> recorderJob = RecordingExporter.jobRecords(JobIntent.FAILED)
+        .withWorkflowInstanceKey(workflowInstance.getWorkflowInstanceKey())
+        .getFirst();
+
+    assertThat(recorderJob.getValue().getErrorMessage()).isNotNull().contains("some message");
+  }
+
+  @Test
+  public void failIfBodyIsNotValidJson() {
+    stubFor(post(urlEqualTo("/api")).willReturn(aResponse().withStatus(400).withBody("{error.code = some code}")));
+
+    final WorkflowInstanceEvent workflowInstance =
+        createInstance(
+            serviceTask ->
+                serviceTask
+                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
+                    .zeebeTaskHeader("errorCodePath", "error.code")
+                    .zeebeTaskHeader("errorMessagePath", "error.message")
+                    .zeebeTaskHeader("method", "POST"));
+
+    Record<JobRecordValue> recorderJob = RecordingExporter.jobRecords(JobIntent.FAILED)
+        .withWorkflowInstanceKey(workflowInstance.getWorkflowInstanceKey())
+        .getFirst();
+
+    assertThat(recorderJob.getValue().getErrorMessage()).isNotNull().contains("failed with 400");
   }
 
   @Test

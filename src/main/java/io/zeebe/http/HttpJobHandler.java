@@ -33,6 +33,8 @@ import org.springframework.stereotype.Component;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.JsonPointer;
+import com.fasterxml.jackson.databind.JsonNode;
 
 import io.zeebe.client.api.response.ActivatedJob;
 import io.zeebe.client.api.worker.JobClient;
@@ -51,6 +53,8 @@ public class HttpJobHandler implements JobHandler {
   private static final String PARAMETER_AUTHORIZATION = "authorization";
   private static final String PARAMETER_HTTP_STATUS_CODE_FAILURE = "statusCodeFailure";
   private static final String PARAMETER_HTTP_STATUS_CODE_COMPLETION = "statusCodeCompletion";
+  private static final String PARAMETER_HTTP_ERROR_CODE_PATH = "errorCodePath";
+  private static final String PARAMETER_HTTP_ERROR_MESSAGE_PATH = "errorMessagePath";
 
   private final HttpClient client = HttpClient.newHttpClient();
   private final ObjectMapper objectMapper = new ObjectMapper();
@@ -69,10 +73,7 @@ public class HttpJobHandler implements JobHandler {
     final HttpResponse<String> response = requestFuture.get(RESPONSE_TIMEOUT_VALUE, RESPONSE_TIMEOUT_TIME_UNIT);
     
     if (hasFailingStatusCode(response, configurationMaps)) {
-      jobClient.newFailCommand(job.getKey()) //
-      .retries(job.getRetries()-1) // simply decremenent retries for now, but we should think about it: https://github.com/zeebe-io/zeebe-http-worker/issues/22 
-      .errorMessage( "Http request failed with " + response.statusCode() + ": " + response.body() ) //
-      .send().join(); 
+      processFailure(configurationMaps, jobClient, job, response);
     } else if (hasCompletingStatusCode(response, configurationMaps)) {
       final Map<String, Object> result = processResponse(job, response);
       jobClient.newCompleteCommand(job.getKey()).variables(result).send().join();
@@ -84,6 +85,37 @@ public class HttpJobHandler implements JobHandler {
       // TODO: Also would be great to be able to add the status code here as well
       // but currently no Zeebe API available to do this
     }
+  }
+
+  /**
+   * Send a Fail command or throw a Zeebe error
+   */
+  private void processFailure(ConfigurationMaps configurationMaps, JobClient jobClient, ActivatedJob job, HttpResponse<String> response) {
+    Optional<String> errorCode = extractFromBody(configurationMaps, response.body(), PARAMETER_HTTP_ERROR_CODE_PATH);
+    String errorMessage = extractFromBody(configurationMaps, response.body(), PARAMETER_HTTP_ERROR_MESSAGE_PATH)
+      .orElse("Http request failed with " + response.statusCode() + ": " + response.body());
+
+    // if the error code is configured and was found on the response, throw a Zeebe error command
+    errorCode.ifPresentOrElse(code ->
+        jobClient.newThrowErrorCommand(job.getKey())
+          .errorCode(code)
+          // extracted message or empty string if not found
+          .errorMessage(errorMessage)
+          .send().join(),
+      () ->
+        // if no error was configured or extracted, fail the job
+        jobClient.newFailCommand(job.getKey())
+          .retries(job.getRetries() - 1) // simply decrement retries for now, but we should think about it: https://github.com/zeebe-io/zeebe-http-worker/issues/22
+          .errorMessage(errorMessage)
+          .send().join()
+    );
+  }
+
+  private Optional<String> extractFromBody(ConfigurationMaps configurationMaps, String body, String pathParameterName) {
+    return configurationMaps.getString(pathParameterName)
+            .map(p -> "/" + p.replace('.', '/'))
+            .map(JsonPointer::compile)
+            .flatMap(pointer -> extractPath(body, pointer));
   }
 
   private HttpRequest buildRequest(ConfigurationMaps configurationMaps) {
@@ -187,6 +219,15 @@ public class HttpJobHandler implements JobHandler {
       return objectMapper.readValue(body, Object.class);
     } catch (IOException e) {
       throw new RuntimeException("Failed to deserialize response body from JSON: " + body);
+    }
+  }
+
+  private Optional<String> extractPath(String body, JsonPointer pointer) {
+    try {
+      JsonNode valueNode = objectMapper.readTree(body).at(pointer);
+      return Optional.ofNullable(valueNode.textValue());
+    } catch (IOException e) {
+      return Optional.empty();
     }
   }
 }
