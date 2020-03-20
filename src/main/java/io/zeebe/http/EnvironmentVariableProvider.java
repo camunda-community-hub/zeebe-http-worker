@@ -55,7 +55,7 @@ public class EnvironmentVariableProvider {
   public Map<String, String> getVariables() {
     // only read if environment variable is set, otherwise return empty map
     if (!config.isEnvironmentVariableUrlSet()) {
-      return Map.of();
+      return Map.copyOf(System.getenv());
     }
     // if cached values are there and up-to-date, return them
     if (cachedVariables != null
