@@ -46,7 +46,7 @@ You can use placeholders in the form of `{{PLACEHOLDER}}` at all places, they wi
 
 * custom headers from the BPMN model
 * Workflow variables
-* Configuration Variables from URL (see below)
+* Local Environment Variables or Configuration Variables from URL (see below)
 
 [Mustache](https://github.com/spullara/mustache.java) is used for replacing the placeholders, refer to their docs to check possibilities.
 
@@ -113,7 +113,9 @@ The connection to the broker Zeebe can be changed by setting the environment var
 
 This worker uses [Spring Zeebe]( https://github.com/zeebe-io/spring-zeebe/) underneath, so all configuration options available there are also available here.
 
-## Configuration Variables from URL
+## Configuration Variables
+
+### From URL
 
 You can load additional configuration values used to substitute placeholders. Therefor the worker will query an HTTP endpoint and expects a JSON back:
 
@@ -139,6 +141,14 @@ To load additional config variables from an URL set these environment variables:
 * `ENV_VARS_M2M_CLIENT_SECRET`
 * `ENV_VARS_M2M_AUDIENCE`
 
+### Local Environment Variables
+
+You can use local environment variable to substitute placeholders (`ENV_VARS_URL` must not be set).
+
+To avoid exposing sensitive information, only prefixed environment variables will be accessible.
+
+The prefix can be configured with:
+* `LOCAL_ENV_PREFIX` (default `WORKFLOW_ENV_`)
 
 ## Code of Conduct
 

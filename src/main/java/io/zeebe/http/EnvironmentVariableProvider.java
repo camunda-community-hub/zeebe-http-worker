@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import javax.annotation.PostConstruct;
 
@@ -53,9 +54,9 @@ public class EnvironmentVariableProvider {
   
   @PostConstruct // Make sure that variable URL is already checked during worker startup
   public Map<String, String> getVariables() {
-    // only read if environment variable is set, otherwise return empty map
+    // only read if environment variable is set, otherwise return local env
     if (!config.isEnvironmentVariableUrlSet()) {
-      return Map.copyOf(System.getenv());
+      return getLocalEnvVariables();
     }
     // if cached values are there and up-to-date, return them
     if (cachedVariables != null
@@ -96,6 +97,12 @@ public class EnvironmentVariableProvider {
       throw new RuntimeException(
           "Could not load variables from '" + config.getEnvironmentVariablesUrl() + "': " + e.getMessage(), e);
     }
+  }
+
+  public Map<String, String> getLocalEnvVariables() {
+    return System.getenv().entrySet().stream()
+      .filter(e -> e.getKey().startsWith(config.getLocalEnvironmentVariablesPrefix()))
+      .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
   }
 
   private HttpRequest createHttpRequest() throws IOException, InterruptedException {
