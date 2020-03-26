@@ -26,8 +26,11 @@ public class ZeebeHttpWorkerConfig {
   @Value( "${ENV_VARS_M2M_AUDIENCE:#{null}}")
   private String environmentVariablesM2mAudience;  
 
-  @Value( "${LOCAL_ENV_PREFIX:WORKFLOW_ENV_}")
-  private String localEnvironmentVariablesPrefix;
+  @Value( "${ENV_VARS_PREFIX:ZEEBE_ENV_}")
+  private String environmentVariablesPrefix;
+
+  @Value( "${ENV_VARS_REMOVE_PREFIX:true}")
+  private Boolean removeEnvironmentVariablesPrefix;
 
   public boolean isEnvironmentVariableUrlSet() {
     return (getEnvironmentVariablesUrl() != null && getEnvironmentVariablesUrl().length() > 0);
@@ -61,6 +64,14 @@ public class ZeebeHttpWorkerConfig {
     return environmentVariablesM2mAudience;
   }
 
-  public String getLocalEnvironmentVariablesPrefix() { return localEnvironmentVariablesPrefix; }
+  public String getEnvironmentVariablesPrefix() {
+    if (environmentVariablesPrefix != null) {
+      return environmentVariablesPrefix;
+    } else {
+      return "";
+    }
+  }
+
+  public Boolean removeEnvironmentVariablesPrefix() { return removeEnvironmentVariablesPrefix; }
 
 }

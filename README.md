@@ -108,16 +108,26 @@ The connection to the broker Zeebe can be changed by setting the environment var
 
 * `ZEEBE_CLIENT_BROKER_CONTACTPOINT` (default: `127.0.0.1:26500`).
 * `ZEEBE_CLIENT_SECURITY_PLAINTEXT` (default: true).
-* `ZEEBE_WORKER_DEFAULTNAME` (default `http-worker`)
-* `ZEEBE_WORKER_DEFAULTTYPE` (default `http`)
+* `ZEEBE_WORKER_DEFAULTNAME` (default: `http-worker`)
+* `ZEEBE_WORKER_DEFAULTTYPE` (default: `http`)
 
 This worker uses [Spring Zeebe]( https://github.com/zeebe-io/spring-zeebe/) underneath, so all configuration options available there are also available here.
 
 ## Configuration Variables
 
-### From URL
+You can load additional configuration values used to substitute placeholders:
+- Remotely via HTTP (`ENV_VARS_URL`)
+- Locally via local environment variables (if `ENV_VARS_URL` was not set)
 
-You can load additional configuration values used to substitute placeholders. Therefor the worker will query an HTTP endpoint and expects a JSON back:
+To avoid exposing sensitive information, a prefix can be used to filter variables.
+
+The prefix can be configured with:
+* `ENV_VARS_PREFIX` (default: `"ZEEBE_ENV_"`)
+* `ENV_VARS_REMOVE_PREFIX` (default: `true`)
+
+### Remote Variables Configuration
+
+If `ENV_VARS_URL` is configured, the worker will query a HTTP endpoint and expects a JSON back:
 
 ```
 [
@@ -140,15 +150,6 @@ To load additional config variables from an URL set these environment variables:
 * `ENV_VARS_M2M_CLIENT_ID`
 * `ENV_VARS_M2M_CLIENT_SECRET`
 * `ENV_VARS_M2M_AUDIENCE`
-
-### Local Environment Variables
-
-You can use local environment variable to substitute placeholders (`ENV_VARS_URL` must not be set).
-
-To avoid exposing sensitive information, only prefixed environment variables will be accessible.
-
-The prefix can be configured with:
-* `LOCAL_ENV_PREFIX` (default `WORKFLOW_ENV_`)
 
 ## Code of Conduct
 
