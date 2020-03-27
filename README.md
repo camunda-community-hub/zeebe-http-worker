@@ -117,17 +117,11 @@ This worker uses [Spring Zeebe]( https://github.com/zeebe-io/spring-zeebe/) unde
 
 You can load additional configuration values used to substitute placeholders:
 - Remotely via HTTP (`ENV_VARS_URL`)
-- Locally via local environment variables (if `ENV_VARS_URL` was not set)
-
-To avoid exposing sensitive information, a prefix can be used to filter variables.
-
-The prefix can be configured with:
-* `ENV_VARS_PREFIX` (default: `"ZEEBE_ENV_"`)
-* `ENV_VARS_REMOVE_PREFIX` (default: `true`)
+- Locally using environment variables (if `ENV_VARS_URL` isn't set)
 
 ### Remote Variables Configuration
 
-If `ENV_VARS_URL` is configured, the worker will query a HTTP endpoint and expects a JSON back:
+If `ENV_VARS_URL` is configured, the worker will query an HTTP endpoint and expects a JSON back:
 
 ```
 [
@@ -150,6 +144,14 @@ To load additional config variables from an URL set these environment variables:
 * `ENV_VARS_M2M_CLIENT_ID`
 * `ENV_VARS_M2M_CLIENT_SECRET`
 * `ENV_VARS_M2M_AUDIENCE`
+
+### Local Environment Variables
+
+To avoid exposing sensitive information, a prefix can be used to filter environment variables.
+
+To change the prefix set these environment variables:
+* `LOCAL_ENV_VARS_PREFIX` (default: `"ZEEBE_ENV_"`)
+* `LOCAL_ENV_VARS_REMOVE_PREFIX` (default: `true`)
 
 ## Code of Conduct
 

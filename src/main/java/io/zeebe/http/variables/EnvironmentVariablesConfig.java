@@ -12,7 +12,7 @@ public class EnvironmentVariablesConfig {
     if (config.isEnvironmentVariableUrlSet()) {
       return new RemoteEnvironmentVariablesProvider(config);
     } else {
-      return new LocalVariableProvider(config);
+      return new LocalVariablesProvider(config);
     }
   }
 

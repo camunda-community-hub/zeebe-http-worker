@@ -10,7 +10,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-public class EnvironmentVariablesProviderTest {
+public class LocalVariablesProviderTest {
 
   private static final String PREFIX = "SOME_PREFIX_";
   private static final String PREFIX_MIXED_CASE = "some_Prefix_";
@@ -21,7 +21,7 @@ public class EnvironmentVariablesProviderTest {
   public void setUp() {
     config = mock(ZeebeHttpWorkerConfig.class);
 
-    provider = new EnvironmentVariablesProvider(config) {
+    provider = new LocalVariablesProvider(config) {
       protected Map<String, String> getRawVariables() {
         return Map.of(
           PREFIX + "prefixed", "1",
@@ -34,8 +34,8 @@ public class EnvironmentVariablesProviderTest {
 
   @Test
   public void returnsOnlyVariablesWithPrefix() {
-    when(config.getEnvironmentVariablesPrefix()).thenReturn(PREFIX);
-    when(config.removeEnvironmentVariablesPrefix()).thenReturn(false);
+    when(config.getLocalEnvironmentVariablesPrefix()).thenReturn(PREFIX);
+    when(config.removeLocalEnvironmentVariablesPrefix()).thenReturn(false);
 
     assertThat(provider.getVariables())
       .containsExactlyInAnyOrderEntriesOf(Map.of(
@@ -46,8 +46,8 @@ public class EnvironmentVariablesProviderTest {
 
   @Test
   public void returnsOnlyVariablesWithPrefixAndRemovesPrefix() {
-    when(config.getEnvironmentVariablesPrefix()).thenReturn(PREFIX);
-    when(config.removeEnvironmentVariablesPrefix()).thenReturn(true);
+    when(config.getLocalEnvironmentVariablesPrefix()).thenReturn(PREFIX);
+    when(config.removeLocalEnvironmentVariablesPrefix()).thenReturn(true);
 
     assertThat(provider.getVariables())
       .containsExactlyInAnyOrderEntriesOf(Map.of(
@@ -58,8 +58,8 @@ public class EnvironmentVariablesProviderTest {
 
   @Test
   public void returnsAllVariablesIfPrefixIsEmpty() {
-    when(config.getEnvironmentVariablesPrefix()).thenReturn("");
-    when(config.removeEnvironmentVariablesPrefix()).thenReturn(false);
+    when(config.getLocalEnvironmentVariablesPrefix()).thenReturn("");
+    when(config.removeLocalEnvironmentVariablesPrefix()).thenReturn(false);
 
     assertThat(provider.getVariables())
       .containsExactlyInAnyOrderEntriesOf(Map.of(
@@ -71,8 +71,8 @@ public class EnvironmentVariablesProviderTest {
 
   @Test
   public void removePrefixDoesNothingIfEmpty() {
-    when(config.getEnvironmentVariablesPrefix()).thenReturn("");
-    when(config.removeEnvironmentVariablesPrefix()).thenReturn(true);
+    when(config.getLocalEnvironmentVariablesPrefix()).thenReturn("");
+    when(config.removeLocalEnvironmentVariablesPrefix()).thenReturn(true);
 
     assertThat(provider.getVariables())
       .containsExactlyInAnyOrderEntriesOf(Map.of(

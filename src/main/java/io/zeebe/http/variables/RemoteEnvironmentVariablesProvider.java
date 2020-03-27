@@ -27,8 +27,9 @@ import java.util.Map;
  * <p>This can be e.g. used to hand over cloud worker configurations.
  *
  */
-public class RemoteEnvironmentVariablesProvider extends EnvironmentVariablesProvider {
+public class RemoteEnvironmentVariablesProvider implements EnvironmentVariablesProvider {
 
+  private final ZeebeHttpWorkerConfig config;
   private final HttpClient client = HttpClient.newHttpClient();
   private final ObjectMapper objectMapper = new ObjectMapper();
   
@@ -44,12 +45,12 @@ public class RemoteEnvironmentVariablesProvider extends EnvironmentVariablesProv
   }
 
   protected RemoteEnvironmentVariablesProvider(ZeebeHttpWorkerConfig config) {
-    super(config);
+    this.config = config;
     // Make sure that variable URL is already checked during worker startup
-    getRawVariables();
+    getVariables();
   }
 
-  protected Map<String, String> getRawVariables() {
+  public Map<String, String> getVariables() {
     // if cached values are there and up-to-date, return them
     if (cachedVariables != null
         && Duration.between(lastUpdate, Instant.now()).toMillis() < config.getEnvironmentVariablesReloadInterval().toMillis()) {

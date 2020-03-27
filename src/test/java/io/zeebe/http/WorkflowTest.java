@@ -30,10 +30,8 @@ import io.zeebe.test.util.record.RecordingExporter;
 
 @RunWith(SpringRunner.class)
 @SpringBootTest(properties = {
-  "ENV_VARS_URL=http://localhost:8089/config", "ENV_VARS_RELOAD_RATE=0",    
-  "ENV_VARS_M2M_BASE_URL:http://localhost:8089/token", "ENV_VARS_M2M_CLIENT_ID:someClientId", 
-  "ENV_VARS_M2M_CLIENT_SECRET:someSecret", "ENV_VARS_M2M_AUDIENCE:someAudience",
-  "ENV_VARS_PREFIX:#{null}"
+    "ENV_VARS_URL=http://localhost:8089/config", "ENV_VARS_RELOAD_RATE=0",    
+    "ENV_VARS_M2M_BASE_URL:http://localhost:8089/token", "ENV_VARS_M2M_CLIENT_ID:someClientId", "ENV_VARS_M2M_CLIENT_SECRET:someSecret", "ENV_VARS_M2M_AUDIENCE:someAudience"
 })
 public class WorkflowTest {
 
