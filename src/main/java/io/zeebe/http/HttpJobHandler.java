@@ -28,6 +28,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import io.zeebe.http.variables.EnvironmentVariablesProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -61,12 +62,12 @@ public class HttpJobHandler implements JobHandler {
   private final PlaceholderProcessor placeholderProcessor = new PlaceholderProcessor();
 
   @Autowired
-  private EnvironmentVariableProvider environmentVariableProvider;
+  private EnvironmentVariablesProvider environmentVariablesProvider;
 
   @Override
   public void handle(JobClient jobClient, ActivatedJob job) throws IOException, InterruptedException, ExecutionException, TimeoutException {
 
-    final ConfigurationMaps configurationMaps = new ConfigurationMaps(job, environmentVariableProvider.getVariables());
+    final ConfigurationMaps configurationMaps = new ConfigurationMaps(job, environmentVariablesProvider.getVariables());
     final HttpRequest request = buildRequest(configurationMaps);
 
     CompletableFuture<HttpResponse<String>> requestFuture = client.sendAsync(request, HttpResponse.BodyHandlers.ofString());

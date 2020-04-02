@@ -1,4 +1,9 @@
-package io.zeebe.http;
+package io.zeebe.http.variables;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.zeebe.http.ZeebeHttpWorkerConfig;
 
 import java.io.IOException;
 import java.net.URI;
@@ -14,15 +19,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import javax.annotation.PostConstruct;
-
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
-
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 /**
  * Helper to load environment variables from a configured URL as JSON map.
  * 
@@ -31,12 +27,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * <p>This can be e.g. used to hand over cloud worker configurations.
  *
  */
-@Component
-public class EnvironmentVariableProvider {
-  
-  @Autowired
-  private ZeebeHttpWorkerConfig config;
+public class RemoteEnvironmentVariablesProvider implements EnvironmentVariablesProvider {
 
+  private final ZeebeHttpWorkerConfig config;
   private final HttpClient client = HttpClient.newHttpClient();
   private final ObjectMapper objectMapper = new ObjectMapper();
   
@@ -50,13 +43,14 @@ public class EnvironmentVariableProvider {
     public String key;
     public String value;
   }
-  
-  @PostConstruct // Make sure that variable URL is already checked during worker startup
+
+  protected RemoteEnvironmentVariablesProvider(ZeebeHttpWorkerConfig config) {
+    this.config = config;
+    // Make sure that variable URL is already checked during worker startup
+    getVariables();
+  }
+
   public Map<String, String> getVariables() {
-    // only read if environment variable is set, otherwise return empty map
-    if (!config.isEnvironmentVariableUrlSet()) {
-      return Map.of();
-    }
     // if cached values are there and up-to-date, return them
     if (cachedVariables != null
         && Duration.between(lastUpdate, Instant.now()).toMillis() < config.getEnvironmentVariablesReloadInterval().toMillis()) {
