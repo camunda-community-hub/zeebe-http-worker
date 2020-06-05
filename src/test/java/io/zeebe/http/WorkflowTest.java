@@ -18,6 +18,7 @@ import org.junit.runner.RunWith;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.junit4.SpringRunner;
 
+import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -290,6 +291,25 @@ public class WorkflowTest {
             .getFirst();
 
     assertThat(recorderJob.getValue().getErrorMessage()).isNotNull().contains("failed with 400");
+  }
+
+  @Test
+  public void failOnHttpStatus500() {
+    stubFor(post(urlEqualTo("/api")).willReturn(aResponse().withStatus(500)));
+
+    final WorkflowInstanceEvent workflowInstance =
+        createInstance(
+            serviceTask ->
+                serviceTask
+                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
+                    .zeebeTaskHeader("method", "POST"));
+
+    Record<JobRecordValue> recorderJob =
+        RecordingExporter.jobRecords(JobIntent.FAILED)
+            .withWorkflowInstanceKey(workflowInstance.getWorkflowInstanceKey())
+            .getFirst();
+
+    assertThat(recorderJob.getValue().getErrorMessage()).isNotNull().contains("failed with 500");
   }
 
   @Test
@@ -603,6 +623,7 @@ public class WorkflowTest {
         .getClient()
         .newDeployCommand()
         .addWorkflowModel(processBuilder.done(), "process.bpmn")
+        .requestTimeout(Duration.ofSeconds(10))
         .send()
         .join();
 
@@ -613,6 +634,7 @@ public class WorkflowTest {
             .bpmnProcessId("process")
             .latestVersion()
             .variables(variables)
+            .requestTimeout(Duration.ofSeconds(10))
             .send()
             .join();
 
