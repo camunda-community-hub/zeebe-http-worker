@@ -198,7 +198,8 @@ public class HttpJobHandler implements JobHandler {
       || (statusCode.startsWith("1") && matchCodePattern.contains("1xx"))
       || (statusCode.startsWith("2") && matchCodePattern.contains("2xx"))
       || (statusCode.startsWith("3") && matchCodePattern.contains("3xx"))
-      || (statusCode.startsWith("4") && matchCodePattern.contains("4xx"));
+      || (statusCode.startsWith("4") && matchCodePattern.contains("4xx"))
+      || (statusCode.startsWith("5") && matchCodePattern.contains("5xx"));
   }
 
   private Map<String, Object> processResponse(ActivatedJob job, HttpResponse<String> response) {
