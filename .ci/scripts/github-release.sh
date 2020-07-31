@@ -6,7 +6,7 @@ export PROJECT_NAME="Zeebe HTTP Worker"
 export GITHUB_TOKEN=${GITHUB_TOKEN_PSW}
 export GITHUB_ORG=zeebe-io
 export GITHUB_REPO=zeebe-http-worker
-export ARTIFACT=zeebe-http-worker.jar
+export ARTIFACT=zeebe-http-worker-${RELEASE_VERSION}.jar
 export CHECKSUM=${ARTIFACT}.sha1sum
 
 # create checksum files

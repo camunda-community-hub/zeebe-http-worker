@@ -7,45 +7,7 @@ pipeline {
       cloud 'zeebe-ci'
       label "zeebe-ci-build_${buildName}"
       defaultContainer 'jnlp'
-      yaml '''\
-apiVersion: v1
-kind: Pod
-metadata:
-  labels:
-    agent: zeebe-ci-build
-spec:
-  nodeSelector:
-    cloud.google.com/gke-nodepool: agents-n1-standard-32-netssd-preempt
-  tolerations:
-    - key: "agents-n1-standard-32-netssd-preempt"
-      operator: "Exists"
-      effect: "NoSchedule"
-  containers:
-    - name: maven
-      image: maven:3.6.0-jdk-11
-      command: ["cat"]
-      tty: true
-      resources:
-        limits:
-          cpu: 1
-          memory: 2Gi
-        requests:
-          cpu: 1
-          memory: 2Gi
-    - name: docker
-      image: docker:18.09.4-dind
-      args: ["--storage-driver=overlay2"]
-      securityContext:
-        privileged: true
-      tty: true
-      resources:
-        limits:
-          cpu: 1
-          memory: 1Gi
-        requests:
-          cpu: 500m
-          memory: 512Mi
-'''
+      yamlFile '.ci/podSpecs/distribution.yml'
     }
   }
 
@@ -71,8 +33,7 @@ spec:
       steps {
         container('maven') {
           configFileProvider([configFile(fileId: 'maven-nexus-settings-zeebe', variable: 'MAVEN_SETTINGS_XML')]) {
-            sh 'apt-get update'
-            sh 'apt-get install --no-install-recommends -qq -y libatomic1'
+            sh '.ci/scripts/distribution/prepare.sh'
             sh 'mvn clean install -B -s $MAVEN_SETTINGS_XML -DskipTests'
           }
         }
@@ -89,9 +50,6 @@ spec:
           configFileProvider([configFile(fileId: 'maven-nexus-settings-zeebe', variable: 'MAVEN_SETTINGS_XML')]) {
             sh 'mvn install -B -s $MAVEN_SETTINGS_XML'
           }
-        }
-        container('docker') {
-            sh 'docker build -t camunda/zeebe-http-worker:SNAPSHOT .'
         }
       }
 
@@ -110,9 +68,6 @@ spec:
             sh 'mvn -B -s $MAVEN_SETTINGS_XML generate-sources source:jar javadoc:jar deploy -DskipTests'
           }
         }
-        container('docker') {
-            sh 'docker push camunda/zeebe-http-worker:SNAPSHOT'
-        }
       }
     }
 
@@ -127,6 +82,7 @@ spec:
         GITHUB_TOKEN = credentials('camunda-jenkins-github')
         RELEASE_VERSION = "${params.RELEASE_VERSION}"
         DEVELOPMENT_VERSION = "${params.DEVELOPMENT_VERSION}"
+        DOCKER_HUB = credentials("camunda-dockerhub")
       }
 
       steps {
@@ -140,16 +96,15 @@ spec:
                 sh 'mkdir ~/.ssh/ && ssh-keyscan github.com >> ~/.ssh/known_hosts'
                 sh 'mvn -B -s $MAVEN_SETTINGS_XML -DskipTests source:jar javadoc:jar release:prepare release:perform -Prelease'
                 sh '.ci/scripts/github-release.sh'
-            }
+             }
           }
         }
-
-        container('docker') {
-            sh 'docker build -t camunda/zeebe-http-worker:SNAPSHOT .'
-            sh 'docker tag camunda/zeebe-http-worker:SNAPSHOT camunda/zeebe-http-worker:${RELEASE_VERSION}'
-            sh 'docker push camunda/zeebe-http-worker:${RELEASE_VERSION}'
-            sh 'docker tag camunda/zeebe-http-worker:SNAPSHOT camunda/zeebe-http-worker:latest'
-            sh 'docker push camunda/zeebe-http-worker:latest'
+        container('maven') {
+          configFileProvider([configFile(fileId: 'maven-nexus-settings-zeebe', variable: 'MAVEN_SETTINGS_XML')]) {
+              sshagent(['camunda-jenkins-github-ssh']) {
+                  sh 'mvn jib:build -Djib.to.tags=latest,${RELEASE_VERSION} -Djib.to.auth.username=${DOCKER_HUB_USR} -Djib.to.auth.password=${DOCKER_HUB_PSW}'
+             }
+          }
         }
       }
     }
