@@ -5,7 +5,7 @@ zeebe:
       defaultType: http
       threads: 3
 
-    job.timeout: 10000
+    job.timeout: 120000
     broker.contactPoint: 127.0.0.1:26500
     security.plaintext: true
 
