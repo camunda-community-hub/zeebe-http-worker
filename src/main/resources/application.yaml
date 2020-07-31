@@ -1,0 +1,20 @@
+zeebe:
+  client:
+    worker:
+      defaultName: http-worker
+      defaultType: http
+      threads: 3
+
+    job.timeout: 120000
+    broker.contactPoint: 127.0.0.1:26500
+    security.plaintext: true
+
+logging:
+  level:
+    root: ERROR
+    io.zeebe: INFO
+    io.zeebe.http: DEBUG
+
+management:
+  server:
+    port: 8080
