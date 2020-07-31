@@ -2,8 +2,6 @@
 
 A Zeebe worker to make HTTP calls (e.g. invoking a REST service). It is based on the built-in Java HttpClient.
 
-> Requirements: Java 11
-
 ## Usage
 
 ### BPMN Task
@@ -80,19 +78,31 @@ A common example is
 
 To allow this, the `jobKey` can be passed to the external service.
 
-
 ## Install
-
-### JAR 
-
-* Download the [JAR file](https://github.com/zeebe-io/zeebe-http-worker/releases) 
-* Execute the JAR via
-
-    `java -jar target/zeebe-http-worker-{VERSION}.jar`
 
 ### Docker
 
-    `docker run camunda/zeebe-http-worker`
+The docker image for the worker is published to [DockerHub](https://hub.docker.com/r/camunda/zeebe-http-worker).
+
+```
+docker pull camunda/zeebe-http-worker:latest
+```
+* configure the connection to the Zeebe broker by setting `zeebe.client.broker.contactPoint` (default: `localhost:26500`) 
+
+For a local setup, the repository contains a [docker-compose file](docker/docker-compose.yml). It starts a Zeebe broker and the worker. 
+
+```
+cd docker
+docker-compose up
+```
+
+### Manual
+
+1. Download the latest [worker JAR](https://github.com/zeebe-io/zeebe-http-worker/releases) _(zeebe-http-worker-%{VERSION}.jar
+)_
+
+1. Start the worker
+    `java -jar zeebe-http-worker-{VERSION}.jar`
 
 ### Readiness probes
 
@@ -152,6 +162,12 @@ To avoid exposing sensitive information, a prefix can be used to filter environm
 To change the prefix set these environment variables:
 * `LOCAL_ENV_VARS_PREFIX` (default: `"ZEEBE_ENV_"`)
 * `LOCAL_ENV_VARS_REMOVE_PREFIX` (default: `true`)
+
+## Build from Source
+
+Build with Maven
+
+`mvn clean install`
 
 ## Code of Conduct
 
