@@ -17,7 +17,7 @@
 
     <properties>
         <version.zeebe>0.24.2</version.zeebe>
-        <version.zeebe.spring>0.23.0</version.zeebe.spring>
+        <version.zeebe.spring>0.24.0</version.zeebe.spring>
         <version.spring.boot>2.3.3.RELEASE</version.spring.boot>
 
         <!-- release parent settings -->
