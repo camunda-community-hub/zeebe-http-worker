@@ -2,14 +2,14 @@ package io.zeebe.http;
 
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import com.github.tomakehurst.wiremock.stubbing.Scenario;
-import io.zeebe.client.api.response.WorkflowInstanceEvent;
-import io.zeebe.model.bpmn.Bpmn;
-import io.zeebe.model.bpmn.builder.ServiceTaskBuilder;
-import io.zeebe.protocol.record.Record;
-import io.zeebe.protocol.record.intent.JobIntent;
-import io.zeebe.protocol.record.value.JobRecordValue;
-import io.zeebe.test.ZeebeTestRule;
-import io.zeebe.test.util.record.RecordingExporter;
+import io.camunda.zeebe.client.ZeebeClient;
+import io.camunda.zeebe.client.api.response.ProcessInstanceEvent;
+import io.camunda.zeebe.client.api.response.ProcessInstanceResult;
+import io.camunda.zeebe.model.bpmn.Bpmn;
+import io.camunda.zeebe.model.bpmn.builder.ServiceTaskBuilder;
+import io.camunda.zeebe.protocol.record.intent.JobIntent;
+import io.camunda.zeebe.test.ZeebeTestRule;
+import io.camunda.zeebe.test.util.record.RecordingExporter;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
@@ -50,7 +50,7 @@ import static org.assertj.core.api.Assertions.assertThat;
       "ENV_VARS_M2M_CLIENT_SECRET:someSecret",
       "ENV_VARS_M2M_AUDIENCE:someAudience"
     })
-public class WorkflowTest {
+public class ProcessIntegrationTest {
 
   @ClassRule public static final ZeebeTestRule TEST_RULE = new ZeebeTestRule();
 
@@ -71,7 +71,7 @@ public class WorkflowTest {
 
     System.setProperty(
         "zeebe.client.broker.contactPoint",
-        TEST_RULE.getClient().getConfiguration().getBrokerContactPoint());
+        TEST_RULE.getClient().getConfiguration().getGatewayAddress());
   }
 
   @Before
@@ -87,7 +87,7 @@ public class WorkflowTest {
             .willReturn(
                 aResponse().withHeader("Content-Type", "application/json").withBody("{\"x\":1}")));
 
-    final WorkflowInstanceEvent workflowInstance =
+    final var processInstance =
         createInstance(
             serviceTask ->
                 serviceTask
@@ -95,7 +95,7 @@ public class WorkflowTest {
                     .zeebeTaskHeader("method", "GET"),
             Collections.emptyMap());
 
-    ZeebeTestRule.assertThat(workflowInstance)
+    ZeebeTestRule.assertThat(processInstance)
         .isEnded()
         .hasVariable("statusCode", 200)
         .hasVariable("body", Map.of("x", 1));
@@ -108,7 +108,7 @@ public class WorkflowTest {
 
     stubFor(post(urlEqualTo("/api")).willReturn(aResponse().withStatus(201)));
 
-    final WorkflowInstanceEvent workflowInstance =
+    final var processInstance =
         createInstance(
             serviceTask ->
                 serviceTask
@@ -116,7 +116,7 @@ public class WorkflowTest {
                     .zeebeTaskHeader("method", "POST"),
             Map.of("body", Map.of("x", 1)));
 
-    ZeebeTestRule.assertThat(workflowInstance).isEnded().hasVariable("statusCode", 201);
+    ZeebeTestRule.assertThat(processInstance).isEnded().hasVariable("statusCode", 201);
 
     WIRE_MOCK_RULE.verify(
         postRequestedFor(urlEqualTo("/api"))
@@ -129,7 +129,7 @@ public class WorkflowTest {
 
     stubFor(put(urlEqualTo("/api")).willReturn(aResponse().withStatus(200)));
 
-    final WorkflowInstanceEvent workflowInstance =
+    final var processInstance =
         createInstance(
             serviceTask ->
                 serviceTask
@@ -137,7 +137,7 @@ public class WorkflowTest {
                     .zeebeTaskHeader("method", "PUT"),
             Map.of("body", Map.of("x", 1)));
 
-    ZeebeTestRule.assertThat(workflowInstance).isEnded().hasVariable("statusCode", 200);
+    ZeebeTestRule.assertThat(processInstance).isEnded().hasVariable("statusCode", 200);
 
     WIRE_MOCK_RULE.verify(
         putRequestedFor(urlEqualTo("/api"))
@@ -150,7 +150,7 @@ public class WorkflowTest {
 
     stubFor(delete(urlEqualTo("/api")).willReturn(aResponse().withStatus(200)));
 
-    final WorkflowInstanceEvent workflowInstance =
+    final var processInstance =
         createInstance(
             serviceTask ->
                 serviceTask
@@ -158,7 +158,7 @@ public class WorkflowTest {
                     .zeebeTaskHeader("method", "DELETE"),
             Collections.emptyMap());
 
-    ZeebeTestRule.assertThat(workflowInstance).isEnded().hasVariable("statusCode", 200);
+    ZeebeTestRule.assertThat(processInstance).isEnded().hasVariable("statusCode", 200);
 
     WIRE_MOCK_RULE.verify(deleteRequestedFor(urlEqualTo("/api")));
   }
@@ -168,7 +168,7 @@ public class WorkflowTest {
 
     stubFor(get(urlEqualTo("/api")).willReturn(aResponse().withStatus(404)));
 
-    final WorkflowInstanceEvent workflowInstance =
+    final var processInstance =
         createInstance(
             serviceTask ->
                 serviceTask
@@ -178,7 +178,7 @@ public class WorkflowTest {
                     .zeebeTaskHeader("method", "GET"),
             Map.of());
 
-    ZeebeTestRule.assertThat(workflowInstance).isEnded().hasVariable("statusCode", 404);
+    ZeebeTestRule.assertThat(processInstance).isEnded().hasVariable("statusCode", 404);
   }
 
   @Test
@@ -207,7 +207,7 @@ public class WorkflowTest {
                       .withHeader("Content-Type", "application/json")
                       .withBody("{\"x\":1}")));
 
-      final WorkflowInstanceEvent workflowInstance =
+      final var processInstance =
           createInstance(
               serviceTask ->
                   serviceTask
@@ -219,7 +219,7 @@ public class WorkflowTest {
       // TODO: Think about a better way of doing this :-)
       Thread.sleep(3 * 1000);
 
-      ZeebeTestRule.assertThat(workflowInstance).isEnded();
+      ZeebeTestRule.assertThat(processInstance).isEnded();
 
       WIRE_MOCK_RULE.verify(2, getRequestedFor(urlEqualTo("/api")));
     } finally {
@@ -232,7 +232,7 @@ public class WorkflowTest {
 
     stubFor(get(urlEqualTo("/api")).willReturn(aResponse()));
 
-    final WorkflowInstanceEvent workflowInstance =
+    final var processInstance =
         createInstance(
             serviceTask ->
                 serviceTask
@@ -240,7 +240,7 @@ public class WorkflowTest {
                     .zeebeTaskHeader("method", "GET"),
             Map.of("authorization", "token 123"));
 
-    ZeebeTestRule.assertThat(workflowInstance).isEnded().hasVariable("statusCode", 200);
+    ZeebeTestRule.assertThat(processInstance).isEnded().hasVariable("statusCode", 200);
 
     WIRE_MOCK_RULE.verify(
         getRequestedFor(urlEqualTo("/api")).withHeader("Authorization", equalTo("token 123")));
@@ -250,7 +250,7 @@ public class WorkflowTest {
   public void shouldExposeJobKeyIfStatusCode202() {
     stubFor(post(urlEqualTo("/api")).willReturn(aResponse().withStatus(202)));
 
-    final WorkflowInstanceEvent workflowInstance =
+    final var processInstance =
         createInstance(
             serviceTask ->
                 serviceTask
@@ -259,15 +259,15 @@ public class WorkflowTest {
                     .zeebeTaskHeader("method", "POST")
                     .zeebeTaskHeader("body", "{\"jobKey\":\"{{jobKey}}\"}"));
 
-    Record<JobRecordValue> recorderJob =
+    final var recorderJob =
         RecordingExporter.jobRecords(JobIntent.CREATED)
-            .withWorkflowInstanceKey(workflowInstance.getWorkflowInstanceKey())
+            .withProcessInstanceKey(processInstance.getProcessInstanceKey())
             .getFirst();
 
     // simulate an async callback
     TEST_RULE.getClient().newCompleteCommand(recorderJob.getKey()).send().join();
 
-    ZeebeTestRule.assertThat(workflowInstance).isEnded();
+    ZeebeTestRule.assertThat(processInstance).isEnded();
 
     WIRE_MOCK_RULE.verify(
         postRequestedFor(urlEqualTo("/api"))
@@ -278,16 +278,16 @@ public class WorkflowTest {
   public void failOnHttpStatus400() {
     stubFor(post(urlEqualTo("/api")).willReturn(aResponse().withStatus(400)));
 
-    final WorkflowInstanceEvent workflowInstance =
+    final var processInstance =
         createInstance(
             serviceTask ->
                 serviceTask
                     .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
                     .zeebeTaskHeader("method", "POST"));
 
-    Record<JobRecordValue> recorderJob =
+    final var recorderJob =
         RecordingExporter.jobRecords(JobIntent.FAILED)
-            .withWorkflowInstanceKey(workflowInstance.getWorkflowInstanceKey())
+            .withProcessInstanceKey(processInstance.getProcessInstanceKey())
             .getFirst();
 
     assertThat(recorderJob.getValue().getErrorMessage()).isNotNull().contains("failed with 400");
@@ -297,16 +297,16 @@ public class WorkflowTest {
   public void failOnHttpStatus500() {
     stubFor(post(urlEqualTo("/api")).willReturn(aResponse().withStatus(500)));
 
-    final WorkflowInstanceEvent workflowInstance =
+    final var processInstance =
         createInstance(
             serviceTask ->
                 serviceTask
                     .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
                     .zeebeTaskHeader("method", "POST"));
 
-    Record<JobRecordValue> recorderJob =
+    final var recorderJob =
         RecordingExporter.jobRecords(JobIntent.FAILED)
-            .withWorkflowInstanceKey(workflowInstance.getWorkflowInstanceKey())
+            .withProcessInstanceKey(processInstance.getProcessInstanceKey())
             .getFirst();
 
     assertThat(recorderJob.getValue().getErrorMessage()).isNotNull().contains("failed with 500");
@@ -322,7 +322,7 @@ public class WorkflowTest {
                     .withBody(
                         "{\"error\":{\"code\":\"some-code\",\"message\":\"some message\"}}")));
 
-    final WorkflowInstanceEvent workflowInstance =
+    final var processInstance =
         createInstance(
             serviceTask ->
                 serviceTask
@@ -331,9 +331,9 @@ public class WorkflowTest {
                     .zeebeTaskHeader("errorMessagePath", "error.message")
                     .zeebeTaskHeader("method", "POST"));
 
-    Record<JobRecordValue> recorderJob =
+    final var recorderJob =
         RecordingExporter.jobRecords(JobIntent.ERROR_THROWN)
-            .withWorkflowInstanceKey(workflowInstance.getWorkflowInstanceKey())
+            .withProcessInstanceKey(processInstance.getProcessInstanceKey())
             .getFirst();
 
     assertThat(recorderJob.getValue().getErrorCode()).isNotNull().isEqualTo("some-code");
@@ -347,7 +347,7 @@ public class WorkflowTest {
             .willReturn(
                 aResponse().withStatus(400).withBody("{\"error\":{\"code\":\"some-code\"}}")));
 
-    final WorkflowInstanceEvent workflowInstance =
+    final var processInstance =
         createInstance(
             serviceTask ->
                 serviceTask
@@ -356,9 +356,9 @@ public class WorkflowTest {
                     .zeebeTaskHeader("errorMessagePath", "error.message")
                     .zeebeTaskHeader("method", "POST"));
 
-    Record<JobRecordValue> recorderJob =
+    final var recorderJob =
         RecordingExporter.jobRecords(JobIntent.ERROR_THROWN)
-            .withWorkflowInstanceKey(workflowInstance.getWorkflowInstanceKey())
+            .withProcessInstanceKey(processInstance.getProcessInstanceKey())
             .getFirst();
 
     assertThat(recorderJob.getValue().getErrorCode()).isNotNull().isEqualTo("some-code");
@@ -374,7 +374,7 @@ public class WorkflowTest {
                     .withStatus(400)
                     .withBody("{\"error\":{\"message\":\"some message\"}}")));
 
-    final WorkflowInstanceEvent workflowInstance =
+    final var processInstance =
         createInstance(
             serviceTask ->
                 serviceTask
@@ -383,9 +383,9 @@ public class WorkflowTest {
                     .zeebeTaskHeader("errorMessagePath", "error.message")
                     .zeebeTaskHeader("method", "POST"));
 
-    Record<JobRecordValue> recorderJob =
+    final var recorderJob =
         RecordingExporter.jobRecords(JobIntent.FAILED)
-            .withWorkflowInstanceKey(workflowInstance.getWorkflowInstanceKey())
+            .withProcessInstanceKey(processInstance.getProcessInstanceKey())
             .getFirst();
 
     assertThat(recorderJob.getValue().getErrorMessage()).isNotNull().contains("some message");
@@ -397,7 +397,7 @@ public class WorkflowTest {
         post(urlEqualTo("/api"))
             .willReturn(aResponse().withStatus(400).withBody("{error.code = some code}")));
 
-    final WorkflowInstanceEvent workflowInstance =
+    final var processInstance =
         createInstance(
             serviceTask ->
                 serviceTask
@@ -406,9 +406,9 @@ public class WorkflowTest {
                     .zeebeTaskHeader("errorMessagePath", "error.message")
                     .zeebeTaskHeader("method", "POST"));
 
-    Record<JobRecordValue> recorderJob =
+    final var recorderJob =
         RecordingExporter.jobRecords(JobIntent.FAILED)
-            .withWorkflowInstanceKey(workflowInstance.getWorkflowInstanceKey())
+            .withProcessInstanceKey(processInstance.getProcessInstanceKey())
             .getFirst();
 
     assertThat(recorderJob.getValue().getErrorMessage()).isNotNull().contains("failed with 400");
@@ -419,7 +419,7 @@ public class WorkflowTest {
 
     stubFor(post(urlMatching("/api/.*")).willReturn(aResponse().withStatus(201)));
 
-    final WorkflowInstanceEvent workflowInstance =
+    final var processInstance =
         createInstance(
             serviceTask ->
                 serviceTask
@@ -428,7 +428,7 @@ public class WorkflowTest {
                     .zeebeTaskHeader("body", "{\"y\":{{y}}}"),
             Map.of("x", 1, "y", 2));
 
-    ZeebeTestRule.assertThat(workflowInstance).isEnded().hasVariable("statusCode", 201);
+    ZeebeTestRule.assertThat(processInstance).isEnded().hasVariable("statusCode", 201);
 
     WIRE_MOCK_RULE.verify(
         postRequestedFor(urlEqualTo("/api/1"))
@@ -440,7 +440,7 @@ public class WorkflowTest {
   public void shouldReplaceLegacyPlaceholders() {
     stubFor(post(urlMatching("/api/.*")).willReturn(aResponse().withStatus(201)));
 
-    final WorkflowInstanceEvent workflowInstance =
+    final var processInstance =
         createInstance(
             serviceTask ->
                 serviceTask
@@ -449,7 +449,7 @@ public class WorkflowTest {
                     .zeebeTaskHeader("body", "{\"y\":${y}}"),
             Map.of("x", 1, "y", 2));
 
-    ZeebeTestRule.assertThat(workflowInstance).isEnded().hasVariable("statusCode", 201);
+    ZeebeTestRule.assertThat(processInstance).isEnded().hasVariable("statusCode", 201);
     WIRE_MOCK_RULE.verify(
         postRequestedFor(urlEqualTo("/api/1")).withRequestBody(equalToJson("{\"y\":2}")));
   }
@@ -459,20 +459,20 @@ public class WorkflowTest {
 
     stubFor(post(urlMatching("/api/.*")).willReturn(aResponse().withStatus(201)));
 
-    final WorkflowInstanceEvent workflowInstance =
+    final var processInstance =
         createInstance(
             serviceTask ->
                 serviceTask
                     .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api/{{jobKey}}")
                     .zeebeTaskHeader("method", "POST")
-                    .zeebeTaskHeader("body", "{\"instanceKey\":{{workflowInstanceKey}}}"),
+                    .zeebeTaskHeader("body", "{\"instanceKey\":{{processInstanceKey}}}"),
             Map.of());
 
-    ZeebeTestRule.assertThat(workflowInstance).isEnded().hasVariable("statusCode", 201);
+    ZeebeTestRule.assertThat(processInstance).isEnded().hasVariable("statusCode", 201);
 
-    Record<JobRecordValue> job =
+    final var job =
         RecordingExporter.jobRecords(JobIntent.CREATED)
-            .withWorkflowInstanceKey(workflowInstance.getWorkflowInstanceKey())
+            .withProcessInstanceKey(processInstance.getProcessInstanceKey())
             .getFirst();
 
     WIRE_MOCK_RULE.verify(
@@ -480,41 +480,8 @@ public class WorkflowTest {
             .withHeader("Content-Type", equalTo("application/json"))
             .withRequestBody(
                 equalToJson(
-                    "{\"instanceKey\":" + workflowInstance.getWorkflowInstanceKey() + "}")));
+                    "{\"instanceKey\":" + processInstance.getProcessInstanceKey() + "}")));
   }
-
-  // Can't currently test this, as we can't change properties after the spring container once
-  // started, so not for a single test
-  // and if moved to a seperate Test the current dynamics of the ZeebeRule do not work properly and
-  // I could not investigate that further at the moment
-  //  @Test
-  //  public void shouldReplacePlaceholdersWithConfigVariablesWithoutM2MToken() {
-  //
-  //    stubFor(
-  //        get(urlEqualTo("/config"))
-  //            .willReturn(
-  //                aResponse()
-  //                    .withHeader("Content-Type", "application/json")
-  //                    .withBody("{ \"x\":1,\"y\":2}"))); CHANGE to new format
-  //
-  //    stubFor(post(urlMatching("/api/.*")).willReturn(aResponse().withStatus(201)));
-  //
-  //    final WorkflowInstanceEvent workflowInstance =
-  //        createInstance(
-  //            serviceTask ->
-  //                serviceTask
-  //                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api/{{x}}")
-  //                    .zeebeTaskHeader("method", "POST")
-  //                    .zeebeTaskHeader("body", "{\"y\":{{y}}}"),
-  //            Map.of());
-  //
-  //    ZeebeTestRule.assertThat(workflowInstance).isEnded().hasVariable("statusCode", 201);
-  //
-  //    WIRE_MOCK_RULE.verify(
-  //        postRequestedFor(urlEqualTo("/api/1"))
-  //            .withHeader("Content-Type", equalTo("application/json"))
-  //            .withRequestBody(equalToJson("{\"y\":2}")));
-  //  }
 
   @Test
   public void shouldReplacePlaceholdersWithConfigVariablesWithM2MToken() {
@@ -532,7 +499,7 @@ public class WorkflowTest {
                     .withBody("[ {\"key\": \"x\", \"value\":1},  {\"key\":\"y\", \"value\":2} ]")));
     stubFor(post(urlMatching("/api/.*")).willReturn(aResponse().withStatus(201)));
 
-    final WorkflowInstanceEvent workflowInstance =
+    final var processInstance =
         createInstance(
             serviceTask ->
                 serviceTask
@@ -541,7 +508,7 @@ public class WorkflowTest {
                     .zeebeTaskHeader("body", "{\"y\":{{y}}}"),
             Map.of());
 
-    ZeebeTestRule.assertThat(workflowInstance).isEnded().hasVariable("statusCode", 201);
+    ZeebeTestRule.assertThat(processInstance).isEnded().hasVariable("statusCode", 201);
 
     // I can't check if the /token was called here, as the token is typically already cached from
     // other test runs
@@ -579,7 +546,7 @@ public class WorkflowTest {
 
     stubFor(post(urlMatching("/api/.*")).willReturn(aResponse().withStatus(201)));
 
-    final WorkflowInstanceEvent workflowInstance =
+    final var processInstance =
         createInstance(
             serviceTask ->
                 serviceTask
@@ -588,7 +555,7 @@ public class WorkflowTest {
                     .zeebeTaskHeader("body", "{\"y\":{{y}}}"),
             Map.of());
 
-    ZeebeTestRule.assertThat(workflowInstance).isEnded().hasVariable("statusCode", 201);
+    ZeebeTestRule.assertThat(processInstance).isEnded().hasVariable("statusCode", 201);
 
     WIRE_MOCK_RULE.verify(
         postRequestedFor(urlEqualTo("/token"))
@@ -604,11 +571,11 @@ public class WorkflowTest {
             .withRequestBody(equalToJson("{\"y\":2}")));
   }
 
-  private WorkflowInstanceEvent createInstance(final Consumer<ServiceTaskBuilder> taskCustomizer) {
+  private ProcessInstanceEvent createInstance(final Consumer<ServiceTaskBuilder> taskCustomizer) {
     return createInstance(taskCustomizer, new HashMap<>());
   }
 
-  private WorkflowInstanceEvent createInstance(
+  private ProcessInstanceEvent createInstance(
       final Consumer<ServiceTaskBuilder> taskCustomizer, Map<String, Object> variables) {
 
     ServiceTaskBuilder processBuilder =
@@ -622,12 +589,12 @@ public class WorkflowTest {
     TEST_RULE
         .getClient()
         .newDeployCommand()
-        .addWorkflowModel(processBuilder.done(), "process.bpmn")
+        .addProcessModel(processBuilder.done(), "process.bpmn")
         .requestTimeout(Duration.ofSeconds(10))
         .send()
         .join();
 
-    final WorkflowInstanceEvent workflowInstance =
+    return
         TEST_RULE
             .getClient()
             .newCreateInstanceCommand()
@@ -637,7 +604,5 @@ public class WorkflowTest {
             .requestTimeout(Duration.ofSeconds(10))
             .send()
             .join();
-
-    return workflowInstance;
   }
 }

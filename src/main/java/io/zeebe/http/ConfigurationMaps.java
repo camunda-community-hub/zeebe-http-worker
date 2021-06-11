@@ -1,7 +1,6 @@
 package io.zeebe.http;
 
-import io.zeebe.client.api.response.ActivatedJob;
-
+import io.camunda.zeebe.client.api.response.ActivatedJob;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -41,7 +40,7 @@ public class ConfigurationMaps {
     config.putAll(environmentVariables);
 
     config.put("jobKey", job.getKey());
-    config.put("workflowInstanceKey", job.getWorkflowInstanceKey());
+    config.put("processInstanceKey", job.getProcessInstanceKey());
   }
 
   public Optional<Object> get(String key) {
