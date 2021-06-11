@@ -7,7 +7,7 @@ networks:
 services:
   zeebe:
     container_name: zeebe_broker
-    image: camunda/zeebe:0.24.1
+    image: camunda/zeebe:1.0.0
     environment:
       - ZEEBE_LOG_LEVEL=debug
     ports:
@@ -18,7 +18,7 @@ services:
 
   zeebe-http-worker:
     container_name: zeebe-http-worker
-    image: camunda/zeebe-http-worker:latest
+    image: ghcr.io/camunda-community-hub/zeebe-http-worker:1.0.0
     environment:
       - zeebe.client.broker.contactPoint=zeebe:26500
     depends_on:
