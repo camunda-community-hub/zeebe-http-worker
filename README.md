@@ -87,10 +87,10 @@ To allow this, the `jobKey` can be passed to the external service.
 
 ### Docker
 
-The docker image for the worker is published to [DockerHub](https://hub.docker.com/r/camunda/zeebe-http-worker).
+The docker image for the worker is published to [GitHub Packages](https://github.com/orgs/camunda-community-hub/packages/container/package/zeebe-http-worker).
 
 ```
-docker pull camunda/zeebe-http-worker:latest
+docker pull ghcr.io/camunda-community-hub/zeebe-http-worker:1.0.0
 ```
 * configure the connection to the Zeebe broker by setting `zeebe.client.broker.contactPoint` (default: `localhost:26500`) 
 
@@ -103,7 +103,7 @@ docker-compose up
 
 ### Manual
 
-1. Download the latest [worker JAR](https://github.com/zeebe-io/zeebe-http-worker/releases) _(zeebe-http-worker-%{VERSION}.jar
+1. Download the latest [worker JAR](https://github.com/camunda-community-hub/zeebe-http-worker/releases) _(zeebe-http-worker-%{VERSION}.jar
 )_
 
 1. Start the worker
