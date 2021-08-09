@@ -23,6 +23,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpHeaders;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
@@ -51,6 +52,8 @@ public class HttpJobHandler implements JobHandler {
   private static final String PARAMETER_METHOD = "method";
   private static final String PARAMETER_BODY = "body";
   private static final String PARAMETER_AUTHORIZATION = "authorization";
+  private static final String PARAMETER_CONTENT_TYPE = "contentType";
+  private static final String PARAMETER_ACCEPT = "accept";
   private static final String PARAMETER_HTTP_STATUS_CODE_FAILURE = "statusCodeFailure";
   private static final String PARAMETER_HTTP_STATUS_CODE_COMPLETION = "statusCodeCompletion";
   private static final String PARAMETER_HTTP_ERROR_CODE_PATH = "errorCodePath";
@@ -128,11 +131,11 @@ public class HttpJobHandler implements JobHandler {
         HttpRequest.newBuilder()
             .uri(URI.create(url))
             .timeout(CONNECTION_TIMEOUT)
-            .header("Content-Type", "application/json")
-            .header("Accept", "application/json")
             .method(method, bodyPublisher);
 
-    getAuthentication(configurationMaps).ifPresent(auth -> builder.header("Authorization", auth));
+    getAuthorization(configurationMaps).ifPresent(auth -> builder.header("Authorization", auth));
+    getContentType(configurationMaps).ifPresent(contentType -> builder.header("Content-Type", contentType));
+    getAccept(configurationMaps).ifPresent(accept -> builder.header("Accept", accept));
 
     return builder.build();
   }
@@ -144,10 +147,22 @@ public class HttpJobHandler implements JobHandler {
         .orElseThrow(() -> new RuntimeException("Missing required parameter: " + PARAMETER_URL));
   }
 
-  private Optional<String> getAuthentication(ConfigurationMaps configMaps) {
+  private Optional<String> getAuthorization(ConfigurationMaps configMaps) {
     return configMaps
         .getString(PARAMETER_AUTHORIZATION)
         .map(auth -> placeholderProcessor.process(auth, configMaps.getConfig()));
+  }
+
+  private Optional<String> getContentType(ConfigurationMaps configMaps) {
+    return configMaps
+        .getString(PARAMETER_CONTENT_TYPE)
+        .map(contentType -> placeholderProcessor.process(contentType, configMaps.getConfig()));
+  }
+
+  private Optional<String> getAccept(ConfigurationMaps configMaps) {
+    return configMaps
+        .getString(PARAMETER_ACCEPT)
+        .map(accept -> placeholderProcessor.process(accept, configMaps.getConfig()));
   }
 
   private String getMethod(ConfigurationMaps configMaps) {
@@ -207,12 +222,31 @@ public class HttpJobHandler implements JobHandler {
     int statusCode = response.statusCode();
     result.put("statusCode", statusCode);
 
-    Optional.ofNullable(response.body())
-        .filter(body -> !body.isEmpty())
-        .map(this::bodyToObject)
-        .ifPresent(body -> result.put("body", body));
+    if (isContentType(response.headers(), "application/json")) {
+      
+      Optional.ofNullable(response.body())
+      .filter(body -> !body.isEmpty())
+      .map(this::bodyToObject)
+      .ifPresent(body -> result.put("body", body));
+
+    } else if (isContentType(response.headers(), "text/plain")) {
+
+      Optional.ofNullable(response.body())
+      .filter(body -> !body.isEmpty())
+      .ifPresent(body -> result.put("body", body));
+      
+    } else {
+      
+      throw new RuntimeException("Content type not yet accepted");
+    }
 
     return result;
+  }
+
+  private boolean isContentType(HttpHeaders headers, String acceptHeader) {
+    return Optional.ofNullable(headers.firstValue("Content-Type"))
+      .filter(contentType -> contentType.get().contains(acceptHeader))
+      .isPresent();
   }
 
   private Object bodyToObject(String body) {
