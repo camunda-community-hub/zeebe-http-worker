@@ -104,6 +104,56 @@ public class ProcessIntegrationTest {
   }
 
   @Test
+  public void testGetAcceptPlainTextResponse() {
+
+    stubFor(
+        get(urlEqualTo("/api"))
+            .willReturn(
+                aResponse().withHeader("Content-Type", "text/plain")
+                .withBody("This is text")));
+
+    final var processInstance =
+        createInstance(
+            serviceTask ->
+                serviceTask
+                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
+                    .zeebeTaskHeader("method", "GET")
+                    .zeebeTaskHeader("accept", "text/plain"),
+            Collections.emptyMap());
+
+    ZeebeTestRule.assertThat(processInstance)
+        .isEnded()
+        .hasVariable("statusCode", 200)
+        .hasVariable("body", "This is text");
+
+    WIRE_MOCK_RULE.verify(getRequestedFor(urlEqualTo("/api"))
+        .withHeader("Accept", equalTo("text/plain")));
+  }
+
+  @Test
+  public void failsIfDoesNotAcceptResponseType() {
+    stubFor(
+        post(urlEqualTo("/api"))
+            .willReturn(aResponse().withHeader("Content-Type", "text/plain")
+            .withBody("This is text")));
+
+    final var processInstance =
+        createInstance(
+            serviceTask ->
+                serviceTask
+                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
+                    .zeebeTaskHeader("method", "POST"));
+
+    final var recorderJob =
+        RecordingExporter.jobRecords(JobIntent.FAILED)
+            .withProcessInstanceKey(processInstance.getProcessInstanceKey())
+            .getFirst();
+
+    assertThat(recorderJob.getValue().getErrorMessage()).isNotNull()
+        .contains("Failed to deserialize response body from JSON");
+  }
+
+  @Test
   public void testPostRequest() {
 
     stubFor(post(urlEqualTo("/api")).willReturn(aResponse().withStatus(201)));
