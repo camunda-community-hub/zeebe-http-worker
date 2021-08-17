@@ -78,7 +78,7 @@ public class HttpJobHandler implements JobHandler {
     if (hasFailingStatusCode(response, configurationMaps)) {
       processFailure(configurationMaps, jobClient, job, response);
     } else if (hasCompletingStatusCode(response, configurationMaps)) {
-      final Map<String, Object> result = processResponse(job, response);
+      final Map<String, Object> result = processResponse(job, response, request);
       jobClient.newCompleteCommand(job.getKey()).variables(result).send().join();
     } else {
       // do nothing
@@ -134,8 +134,14 @@ public class HttpJobHandler implements JobHandler {
             .method(method, bodyPublisher);
 
     getAuthorization(configurationMaps).ifPresent(auth -> builder.header("Authorization", auth));
-    getContentType(configurationMaps).ifPresent(contentType -> builder.header("Content-Type", contentType));
-    getAccept(configurationMaps).ifPresent(accept -> builder.header("Accept", accept));
+
+    // if no accept or content type header then default to json
+    getContentType(configurationMaps)
+      .ifPresentOrElse(contentType -> builder.header("Content-Type", contentType),
+      () -> builder.header("Content-Type", "application/json"));
+    getAccept(configurationMaps)
+      .ifPresentOrElse(accept -> builder.header("Accept", accept),
+      () -> builder.header("Accept", "application/json"));
 
     return builder.build();
   }
@@ -216,37 +222,36 @@ public class HttpJobHandler implements JobHandler {
       || (statusCode.startsWith("5") && matchCodePattern.contains("5xx"));
   }
 
-  private Map<String, Object> processResponse(ActivatedJob job, HttpResponse<String> response) {
+  private Map<String, Object> processResponse(ActivatedJob job, 
+    HttpResponse<String> response, HttpRequest request) {
     final Map<String, Object> result = new java.util.HashMap<>();
-
     int statusCode = response.statusCode();
     result.put("statusCode", statusCode);
-
-    if (isContentType(response.headers(), "application/json")) {
-      
-      Optional.ofNullable(response.body())
-      .filter(body -> !body.isEmpty())
-      .map(this::bodyToObject)
-      .ifPresent(body -> result.put("body", body));
-
-    } else if (isContentType(response.headers(), "text/plain")) {
-
-      Optional.ofNullable(response.body())
-      .filter(body -> !body.isEmpty())
-      .ifPresent(body -> result.put("body", body));
-      
+    Optional<String> respBody = Optional.ofNullable(response.body())
+      .filter(body -> !body.isEmpty());
+    String acceptValue = request.headers().firstValue("Accept").orElse(null);
+    // If accepting plain text
+    if (hasContentTypeHeader(response.headers(), "text/plain") && 
+      ("text/plain".equals(acceptValue))) {
+      respBody.ifPresent(body -> result.put("body", body));
     } else {
-      
-      throw new RuntimeException("Content type not yet accepted");
+      // Assuming json by default
+      respBody.map(this::bodyToObject)
+        .ifPresent(body -> result.put("body", body));
     }
-
     return result;
   }
 
-  private boolean isContentType(HttpHeaders headers, String acceptHeader) {
-    return Optional.ofNullable(headers.firstValue("Content-Type"))
-      .filter(contentType -> contentType.get().contains(acceptHeader))
+  private boolean hasContentTypeHeader(HttpHeaders headers, String contentTypeHeader) {
+    boolean hasContentTypeHeader = false;
+    try {
+      hasContentTypeHeader = Optional.ofNullable(headers.firstValue("Content-Type"))
+      .filter(contentType -> contentType.get().contains(contentTypeHeader))
       .isPresent();
+    }catch(Exception e) {
+      System.out.println(e.toString());
+    }
+    return hasContentTypeHeader;
   }
 
   private Object bodyToObject(String body) {
