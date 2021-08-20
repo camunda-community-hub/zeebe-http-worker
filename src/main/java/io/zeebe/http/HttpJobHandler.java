@@ -23,6 +23,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpHeaders;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
@@ -51,6 +52,8 @@ public class HttpJobHandler implements JobHandler {
   private static final String PARAMETER_METHOD = "method";
   private static final String PARAMETER_BODY = "body";
   private static final String PARAMETER_AUTHORIZATION = "authorization";
+  private static final String PARAMETER_CONTENT_TYPE = "contentType";
+  private static final String PARAMETER_ACCEPT = "accept";
   private static final String PARAMETER_HTTP_STATUS_CODE_FAILURE = "statusCodeFailure";
   private static final String PARAMETER_HTTP_STATUS_CODE_COMPLETION = "statusCodeCompletion";
   private static final String PARAMETER_HTTP_ERROR_CODE_PATH = "errorCodePath";
@@ -75,7 +78,7 @@ public class HttpJobHandler implements JobHandler {
     if (hasFailingStatusCode(response, configurationMaps)) {
       processFailure(configurationMaps, jobClient, job, response);
     } else if (hasCompletingStatusCode(response, configurationMaps)) {
-      final Map<String, Object> result = processResponse(job, response);
+      final Map<String, Object> result = processResponse(job, response, request);
       jobClient.newCompleteCommand(job.getKey()).variables(result).send().join();
     } else {
       // do nothing
@@ -128,11 +131,17 @@ public class HttpJobHandler implements JobHandler {
         HttpRequest.newBuilder()
             .uri(URI.create(url))
             .timeout(CONNECTION_TIMEOUT)
-            .header("Content-Type", "application/json")
-            .header("Accept", "application/json")
             .method(method, bodyPublisher);
 
-    getAuthentication(configurationMaps).ifPresent(auth -> builder.header("Authorization", auth));
+    getAuthorization(configurationMaps).ifPresent(auth -> builder.header("Authorization", auth));
+
+    // if no accept or content type header then default to json
+    getContentType(configurationMaps)
+      .ifPresentOrElse(contentType -> builder.header("Content-Type", contentType),
+      () -> builder.header("Content-Type", "application/json"));
+    getAccept(configurationMaps)
+      .ifPresentOrElse(accept -> builder.header("Accept", accept),
+      () -> builder.header("Accept", "application/json"));
 
     return builder.build();
   }
@@ -144,10 +153,22 @@ public class HttpJobHandler implements JobHandler {
         .orElseThrow(() -> new RuntimeException("Missing required parameter: " + PARAMETER_URL));
   }
 
-  private Optional<String> getAuthentication(ConfigurationMaps configMaps) {
+  private Optional<String> getAuthorization(ConfigurationMaps configMaps) {
     return configMaps
         .getString(PARAMETER_AUTHORIZATION)
         .map(auth -> placeholderProcessor.process(auth, configMaps.getConfig()));
+  }
+
+  private Optional<String> getContentType(ConfigurationMaps configMaps) {
+    return configMaps
+        .getString(PARAMETER_CONTENT_TYPE)
+        .map(contentType -> placeholderProcessor.process(contentType, configMaps.getConfig()));
+  }
+
+  private Optional<String> getAccept(ConfigurationMaps configMaps) {
+    return configMaps
+        .getString(PARAMETER_ACCEPT)
+        .map(accept -> placeholderProcessor.process(accept, configMaps.getConfig()));
   }
 
   private String getMethod(ConfigurationMaps configMaps) {
@@ -201,18 +222,36 @@ public class HttpJobHandler implements JobHandler {
       || (statusCode.startsWith("5") && matchCodePattern.contains("5xx"));
   }
 
-  private Map<String, Object> processResponse(ActivatedJob job, HttpResponse<String> response) {
+  private Map<String, Object> processResponse(ActivatedJob job, 
+    HttpResponse<String> response, HttpRequest request) {
     final Map<String, Object> result = new java.util.HashMap<>();
-
     int statusCode = response.statusCode();
     result.put("statusCode", statusCode);
-
-    Optional.ofNullable(response.body())
-        .filter(body -> !body.isEmpty())
-        .map(this::bodyToObject)
+    Optional<String> respBody = Optional.ofNullable(response.body())
+      .filter(body -> !body.isEmpty());
+    String acceptValue = request.headers().firstValue("Accept").orElse(null);
+    // If accepting plain text
+    if (hasContentTypeHeader(response.headers(), "text/plain") && 
+      ("text/plain".equals(acceptValue))) {
+      respBody.ifPresent(body -> result.put("body", body));
+    } else {
+      // Assuming json by default
+      respBody.map(this::bodyToObject)
         .ifPresent(body -> result.put("body", body));
-
+    }
     return result;
+  }
+
+  private boolean hasContentTypeHeader(HttpHeaders headers, String contentTypeHeader) {
+    boolean hasContentTypeHeader = false;
+    try {
+      hasContentTypeHeader = Optional.ofNullable(headers.firstValue("Content-Type"))
+      .filter(contentType -> contentType.get().contains(contentTypeHeader))
+      .isPresent();
+    }catch(Exception e) {
+      System.out.println(e.toString());
+    }
+    return hasContentTypeHeader;
   }
 
   private Object bodyToObject(String body) {
