@@ -131,26 +131,28 @@ public class ProcessIntegrationTest {
   }
 
   @Test
-  public void failsIfDoesNotAcceptResponseType() {
+  public void testPostContentTypePlainText() {
     stubFor(
         post(urlEqualTo("/api"))
-            .willReturn(aResponse().withHeader("Content-Type", "text/plain")
-            .withBody("This is text")));
+            .willReturn(aResponse().withStatus(200)));
 
     final var processInstance =
         createInstance(
             serviceTask ->
                 serviceTask
                     .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
-                    .zeebeTaskHeader("method", "POST"));
+                    .zeebeTaskHeader("method", "POST")
+                    .zeebeTaskHeader("contentType", "text/plain"),
+            Map.of("body", "This is text"));
 
-    final var recorderJob =
-        RecordingExporter.jobRecords(JobIntent.FAILED)
-            .withProcessInstanceKey(processInstance.getProcessInstanceKey())
-            .getFirst();
+    ZeebeTestRule.assertThat(processInstance)
+        .isEnded()
+        .hasVariable("statusCode", 200);
 
-    assertThat(recorderJob.getValue().getErrorMessage()).isNotNull()
-        .contains("Failed to deserialize response body from JSON");
+    WIRE_MOCK_RULE.verify(
+        postRequestedFor(urlEqualTo("/api"))
+            .withHeader("Content-Type", equalTo("text/plain"))
+            .withRequestBody(equalTo("This is text")));
   }
 
   @Test

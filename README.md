@@ -29,6 +29,8 @@ Example BPMN with service task:
   * `url` - the url to invoke
 * optional custom headers:
   * `method` - the HTTP method to use (default: `GET`, allowed:  `post` | `get` | `put` | `delete` | `patch`)
+  * `contentType` - the type of the request body (default: `application/json`, allowed: any valid HTTP content type)
+  * `accept` - the type of the response body that is accepted (default: `application/json`, allowed: `application/json`, `text/plain`)
   * `statusCodeCompletion` - Status codes that lead to completion of the service task (default: `1xx,2xx`, allowed: comma separated list of codes including 1xx, 2xx, 3xx, 4xx and 5xx)
   * `statusCodeFailure` - Status codes that lead to the job failing  (default: `3xx,4xx,5xx`, allowed: comma separated list of codes including 1xx, 2xx, 3xx, 4xx and 5xx)
   * `errorCodePath` - path expression (dot notation) to extract the error code of a failed response body (e.g. `error.code`). If the error code is present then a BPMN error is thrown with this code instead of failing the job. Otherwise, that leads to the job failing.
