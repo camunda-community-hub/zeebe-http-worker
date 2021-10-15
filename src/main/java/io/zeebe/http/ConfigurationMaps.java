@@ -36,6 +36,14 @@ public class ConfigurationMaps {
     return get(key).map(String::valueOf).filter(v -> !v.isEmpty());
   }
 
+  public Optional<String> getStringIgnoreCase(String key) {
+    return config.entrySet().stream()
+        .filter(entry -> entry.getKey().equalsIgnoreCase(key))
+        .map(entry -> String.valueOf(entry.getValue()))
+        .filter(value -> !value.isEmpty())
+        .findFirst();
+  }
+
   public Map<String, Object> getConfig() {
     return config;
   }
