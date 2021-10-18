@@ -15,15 +15,19 @@
  */
 package io.zeebe.http;
 
+import com.fasterxml.jackson.core.JsonPointer;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.camunda.zeebe.client.api.response.ActivatedJob;
 import io.camunda.zeebe.client.api.worker.JobClient;
 import io.camunda.zeebe.client.api.worker.JobHandler;
+import io.zeebe.http.variables.EnvironmentVariablesProvider;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.net.http.HttpHeaders;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
@@ -31,15 +35,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-
-import io.zeebe.http.variables.EnvironmentVariablesProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.core.JsonPointer;
-import com.fasterxml.jackson.databind.JsonNode;
 
 @Component
 public class HttpJobHandler implements JobHandler {
@@ -47,7 +44,7 @@ public class HttpJobHandler implements JobHandler {
   public static Duration CONNECTION_TIMEOUT = Duration.ofMinutes(1);
   public static long RESPONSE_TIMEOUT_VALUE = 60;
   public static TimeUnit RESPONSE_TIMEOUT_TIME_UNIT = TimeUnit.SECONDS;
-  
+
   private static final String PARAMETER_URL = "url";
   private static final String PARAMETER_METHOD = "method";
   private static final String PARAMETER_BODY = "body";
@@ -74,7 +71,7 @@ public class HttpJobHandler implements JobHandler {
 
     CompletableFuture<HttpResponse<String>> requestFuture = client.sendAsync(request, HttpResponse.BodyHandlers.ofString());
     final HttpResponse<String> response = requestFuture.get(RESPONSE_TIMEOUT_VALUE, RESPONSE_TIMEOUT_TIME_UNIT);
-    
+
     if (hasFailingStatusCode(response, configurationMaps)) {
       processFailure(configurationMaps, jobClient, job, response);
     } else if (hasCompletingStatusCode(response, configurationMaps)) {
@@ -82,7 +79,7 @@ public class HttpJobHandler implements JobHandler {
       jobClient.newCompleteCommand(job.getKey()).variables(result).send().join();
     } else {
       // do nothing
-      // TODO: Would be great to extend the locking time now 
+      // TODO: Would be great to extend the locking time now
       // as this might be used for HTTP 202 to asynchronously complete the task
       // but not yet supported in Zeebe
       // TODO: Also would be great to be able to add the status code here as well
@@ -144,9 +141,9 @@ public class HttpJobHandler implements JobHandler {
   }
 
   private Optional<String> getConfig(final ConfigurationMaps configMaps,
-      final String parameterUrl) {
+      final String parameter) {
     return configMaps
-        .getString(parameterUrl)
+        .getStringIgnoreCase(parameter)
         .map(url -> placeholderProcessor.process(url, configMaps.getConfig()));
   }
 
@@ -206,7 +203,7 @@ public class HttpJobHandler implements JobHandler {
     String statusCodePattern = configurationMaps.getString(PARAMETER_HTTP_STATUS_CODE_COMPLETION).orElse("1xx, 2xx");
     return checkIfCodeMatches(statusCode, statusCodePattern);
   }
-  
+
   private boolean checkIfCodeMatches(String statusCode, String matchCodePattern) {
     return matchCodePattern.contains(statusCode)
       || (statusCode.startsWith("1") && matchCodePattern.contains("1xx"))

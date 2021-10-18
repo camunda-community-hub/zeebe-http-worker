@@ -1,29 +1,5 @@
 package io.zeebe.http;
 
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
-import com.github.tomakehurst.wiremock.stubbing.Scenario;
-import io.camunda.zeebe.client.ZeebeClient;
-import io.camunda.zeebe.client.api.response.ProcessInstanceEvent;
-import io.camunda.zeebe.client.api.response.ProcessInstanceResult;
-import io.camunda.zeebe.model.bpmn.Bpmn;
-import io.camunda.zeebe.model.bpmn.builder.ServiceTaskBuilder;
-import io.camunda.zeebe.protocol.record.intent.JobIntent;
-import io.camunda.zeebe.test.ZeebeTestRule;
-import io.camunda.zeebe.test.util.record.RecordingExporter;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.ClassRule;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.junit4.SpringRunner;
-
-import java.time.Duration;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.function.Consumer;
-
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.delete;
 import static com.github.tomakehurst.wiremock.client.WireMock.deleteRequestedFor;
@@ -39,6 +15,27 @@ import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlMatching;
 import static org.assertj.core.api.Assertions.assertThat;
+
+import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import com.github.tomakehurst.wiremock.stubbing.Scenario;
+import io.camunda.zeebe.client.api.response.ProcessInstanceEvent;
+import io.camunda.zeebe.model.bpmn.Bpmn;
+import io.camunda.zeebe.model.bpmn.builder.ServiceTaskBuilder;
+import io.camunda.zeebe.protocol.record.intent.JobIntent;
+import io.camunda.zeebe.test.ZeebeTestRule;
+import io.camunda.zeebe.test.util.record.RecordingExporter;
+import java.time.Duration;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.Consumer;
+import org.junit.Before;
+import org.junit.BeforeClass;
+import org.junit.ClassRule;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.junit4.SpringRunner;
 
 @RunWith(SpringRunner.class)
 @SpringBootTest(
@@ -194,6 +191,32 @@ public class ProcessIntegrationTest {
     WIRE_MOCK_RULE.verify(
         putRequestedFor(urlEqualTo("/api"))
             .withHeader("Content-Type", equalTo("application/json"))
+            .withRequestBody(equalToJson("{\"x\":1}")));
+  }
+
+  @Test
+  public void testHeaderNamesCanBeUpperAsWell() {
+
+    stubFor(put(urlEqualTo("/api")).willReturn(aResponse().withStatus(200)));
+
+    final var processInstance =
+        createInstance(
+            serviceTask ->
+                serviceTask
+                    .zeebeTaskHeader("URL", WIRE_MOCK_RULE.baseUrl() + "/api")
+                    .zeebeTaskHeader("METHOD", "PUT")
+                    .zeebeTaskHeader("ACCEPT", "text/plain")
+                    .zeebeTaskHeader("CONTENTTYPE", "application/json")
+                    .zeebeTaskHeader("AUTHORIZATION", "secret"),
+            Map.of("body", Map.of("x", 1)));
+
+    ZeebeTestRule.assertThat(processInstance).isEnded().hasVariable("statusCode", 200);
+
+    WIRE_MOCK_RULE.verify(
+        putRequestedFor(urlEqualTo("/api"))
+            .withHeader("Content-Type", equalTo("application/json"))
+            .withHeader("Authorization", equalTo("secret"))
+            .withHeader("Accept", equalTo("text/plain"))
             .withRequestBody(equalToJson("{\"x\":1}")));
   }
 
