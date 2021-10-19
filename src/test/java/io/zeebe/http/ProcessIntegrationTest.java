@@ -322,6 +322,25 @@ public class ProcessIntegrationTest {
   }
 
   @Test
+  public void testCustomHeader() {
+
+    stubFor(get(urlEqualTo("/api")).willReturn(aResponse()));
+
+    final var processInstance =
+        createInstance(
+            serviceTask ->
+                serviceTask
+                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
+                    .zeebeTaskHeader("method", "GET"),
+            Map.of("header-X-API-Key", "top-secret"));
+
+    ZeebeTestRule.assertThat(processInstance).isEnded().hasVariable("statusCode", 200);
+
+    WIRE_MOCK_RULE.verify(
+        getRequestedFor(urlEqualTo("/api")).withHeader("X-API-Key", equalTo("top-secret")));
+  }
+
+  @Test
   public void shouldExposeJobKeyIfStatusCode202() {
     stubFor(post(urlEqualTo("/api")).willReturn(aResponse().withStatus(202)));
 
@@ -680,4 +699,27 @@ public class ProcessIntegrationTest {
             .send()
             .join();
   }
+
+  @Test
+  public void testCustomHeadersCanBeProvided() {
+
+    stubFor(put(urlEqualTo("/api")).willReturn(aResponse().withStatus(200)));
+
+    final var processInstance =
+        createInstance(
+            serviceTask ->
+                serviceTask
+                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
+                    .zeebeTaskHeader("method", "PUT")
+                    .zeebeTaskHeader("header-x-lower", "case")
+                    .zeebeTaskHeader("HEADER-x-upper", "case"));
+
+    ZeebeTestRule.assertThat(processInstance).isEnded().hasVariable("statusCode", 200);
+
+    WIRE_MOCK_RULE.verify(
+        putRequestedFor(urlEqualTo("/api"))
+            .withHeader("x-lower", equalTo("case"))
+            .withHeader("x-upper", equalTo("case")));
+  }
+
 }

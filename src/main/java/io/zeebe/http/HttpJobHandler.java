@@ -15,6 +15,8 @@
  */
 package io.zeebe.http;
 
+import static java.util.stream.Collectors.toMap;
+
 import com.fasterxml.jackson.core.JsonPointer;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -41,6 +43,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class HttpJobHandler implements JobHandler {
 
+  private static final String CUSTOM_HTTP_HEADER_PREFIX = "header-";
   public static Duration CONNECTION_TIMEOUT = Duration.ofMinutes(1);
   public static long RESPONSE_TIMEOUT_VALUE = 60;
   public static TimeUnit RESPONSE_TIMEOUT_TIME_UNIT = TimeUnit.SECONDS;
@@ -64,13 +67,17 @@ public class HttpJobHandler implements JobHandler {
   private EnvironmentVariablesProvider environmentVariablesProvider;
 
   @Override
-  public void handle(JobClient jobClient, ActivatedJob job) throws IOException, InterruptedException, ExecutionException, TimeoutException {
+  public void handle(JobClient jobClient, ActivatedJob job)
+      throws IOException, InterruptedException, ExecutionException, TimeoutException {
 
-    final ConfigurationMaps configurationMaps = new ConfigurationMaps(job, environmentVariablesProvider.getVariables());
+    final ConfigurationMaps configurationMaps = new ConfigurationMaps(job,
+        environmentVariablesProvider.getVariables());
     final HttpRequest request = buildRequest(configurationMaps);
 
-    CompletableFuture<HttpResponse<String>> requestFuture = client.sendAsync(request, HttpResponse.BodyHandlers.ofString());
-    final HttpResponse<String> response = requestFuture.get(RESPONSE_TIMEOUT_VALUE, RESPONSE_TIMEOUT_TIME_UNIT);
+    CompletableFuture<HttpResponse<String>> requestFuture = client.sendAsync(request,
+        HttpResponse.BodyHandlers.ofString());
+    final HttpResponse<String> response = requestFuture.get(RESPONSE_TIMEOUT_VALUE,
+        RESPONSE_TIMEOUT_TIME_UNIT);
 
     if (hasFailingStatusCode(response, configurationMaps)) {
       processFailure(configurationMaps, jobClient, job, response);
@@ -90,32 +97,37 @@ public class HttpJobHandler implements JobHandler {
   /**
    * Send a Fail command or throw a Zeebe error
    */
-  private void processFailure(ConfigurationMaps configurationMaps, JobClient jobClient, ActivatedJob job, HttpResponse<String> response) {
-    Optional<String> errorCode = extractFromBody(configurationMaps, response.body(), PARAMETER_HTTP_ERROR_CODE_PATH);
-    String errorMessage = extractFromBody(configurationMaps, response.body(), PARAMETER_HTTP_ERROR_MESSAGE_PATH)
-      .orElse("Http request failed with " + response.statusCode() + ": " + response.body());
+  private void processFailure(ConfigurationMaps configurationMaps, JobClient jobClient,
+      ActivatedJob job, HttpResponse<String> response) {
+    Optional<String> errorCode = extractFromBody(configurationMaps, response.body(),
+        PARAMETER_HTTP_ERROR_CODE_PATH);
+    String errorMessage = extractFromBody(configurationMaps, response.body(),
+        PARAMETER_HTTP_ERROR_MESSAGE_PATH)
+        .orElse("Http request failed with " + response.statusCode() + ": " + response.body());
 
     // if the error code is configured and was found on the response, throw a Zeebe error command
     errorCode.ifPresentOrElse(code ->
-        jobClient.newThrowErrorCommand(job.getKey())
-          .errorCode(code)
-          // extracted message or empty string if not found
-          .errorMessage(errorMessage)
-          .send().join(),
-      () ->
-        // if no error was configured or extracted, fail the job
-        jobClient.newFailCommand(job.getKey())
-          .retries(job.getRetries() - 1) // simply decrement retries for now, but we should think about it: https://github.com/zeebe-io/zeebe-http-worker/issues/22
-          .errorMessage(errorMessage)
-          .send().join()
+            jobClient.newThrowErrorCommand(job.getKey())
+                .errorCode(code)
+                // extracted message or empty string if not found
+                .errorMessage(errorMessage)
+                .send().join(),
+        () ->
+            // if no error was configured or extracted, fail the job
+            jobClient.newFailCommand(job.getKey())
+                .retries(job.getRetries()
+                    - 1) // simply decrement retries for now, but we should think about it: https://github.com/zeebe-io/zeebe-http-worker/issues/22
+                .errorMessage(errorMessage)
+                .send().join()
     );
   }
 
-  private Optional<String> extractFromBody(ConfigurationMaps configurationMaps, String body, String pathParameterName) {
+  private Optional<String> extractFromBody(ConfigurationMaps configurationMaps, String body,
+      String pathParameterName) {
     return configurationMaps.getString(pathParameterName)
-            .map(p -> "/" + p.replace('.', '/'))
-            .map(JsonPointer::compile)
-            .flatMap(pointer -> extractPath(body, pointer));
+        .map(p -> "/" + p.replace('.', '/'))
+        .map(JsonPointer::compile)
+        .flatMap(pointer -> extractPath(body, pointer));
   }
 
   private HttpRequest buildRequest(ConfigurationMaps configurationMaps) {
@@ -135,9 +147,19 @@ public class HttpJobHandler implements JobHandler {
             .header("Accept", accept)
             .method(method, bodyPublisher);
 
+    applyCustomHttpHeaders(configurationMaps).forEach(builder::header);
+
     getAuthorization(configurationMaps).ifPresent(auth -> builder.header("Authorization", auth));
 
     return builder.build();
+  }
+
+  private Map<String, String> applyCustomHttpHeaders(ConfigurationMaps configurationMaps) {
+    final Map<String, Object> config = configurationMaps.getConfig();
+    return config.entrySet().stream()
+        .filter(entry -> entry.getKey().toLowerCase().startsWith(CUSTOM_HTTP_HEADER_PREFIX))
+        .collect(toMap(entry -> entry.getKey().substring(CUSTOM_HTTP_HEADER_PREFIX.length()),
+            entry -> placeholderProcessor.process(entry.getValue().toString(), config)));
   }
 
   private Optional<String> getConfig(final ConfigurationMaps configMaps,
@@ -193,24 +215,29 @@ public class HttpJobHandler implements JobHandler {
     }
   }
 
-  private boolean hasFailingStatusCode(HttpResponse<String> response, ConfigurationMaps configurationMaps) {
+  private boolean hasFailingStatusCode(HttpResponse<String> response,
+      ConfigurationMaps configurationMaps) {
     String statusCode = String.valueOf(response.statusCode()).toLowerCase();
-    String statusCodePattern = configurationMaps.getString(PARAMETER_HTTP_STATUS_CODE_FAILURE).orElse("3xx, 4xx, 5xx");
+    String statusCodePattern = configurationMaps.getString(PARAMETER_HTTP_STATUS_CODE_FAILURE)
+        .orElse("3xx, 4xx, 5xx");
     return checkIfCodeMatches(statusCode, statusCodePattern);
   }
-  private boolean hasCompletingStatusCode(HttpResponse<String> response, ConfigurationMaps configurationMaps) {
+
+  private boolean hasCompletingStatusCode(HttpResponse<String> response,
+      ConfigurationMaps configurationMaps) {
     String statusCode = String.valueOf(response.statusCode()).toLowerCase();
-    String statusCodePattern = configurationMaps.getString(PARAMETER_HTTP_STATUS_CODE_COMPLETION).orElse("1xx, 2xx");
+    String statusCodePattern = configurationMaps.getString(PARAMETER_HTTP_STATUS_CODE_COMPLETION)
+        .orElse("1xx, 2xx");
     return checkIfCodeMatches(statusCode, statusCodePattern);
   }
 
   private boolean checkIfCodeMatches(String statusCode, String matchCodePattern) {
     return matchCodePattern.contains(statusCode)
-      || (statusCode.startsWith("1") && matchCodePattern.contains("1xx"))
-      || (statusCode.startsWith("2") && matchCodePattern.contains("2xx"))
-      || (statusCode.startsWith("3") && matchCodePattern.contains("3xx"))
-      || (statusCode.startsWith("4") && matchCodePattern.contains("4xx"))
-      || (statusCode.startsWith("5") && matchCodePattern.contains("5xx"));
+        || (statusCode.startsWith("1") && matchCodePattern.contains("1xx"))
+        || (statusCode.startsWith("2") && matchCodePattern.contains("2xx"))
+        || (statusCode.startsWith("3") && matchCodePattern.contains("3xx"))
+        || (statusCode.startsWith("4") && matchCodePattern.contains("4xx"))
+        || (statusCode.startsWith("5") && matchCodePattern.contains("5xx"));
   }
 
   private Map<String, Object> processResponse(ActivatedJob job,
