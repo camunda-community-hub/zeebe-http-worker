@@ -16,7 +16,7 @@
     </parent>
 
     <properties>
-        <version.zeebe>1.2.8</version.zeebe>
+        <version.zeebe>1.2.9</version.zeebe>
         <version.zeebe.spring>1.2.8</version.zeebe.spring>
         <version.spring.boot>2.5.7</version.spring.boot>
 
