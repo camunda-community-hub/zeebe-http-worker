@@ -4,7 +4,7 @@
     <name>Zeebe HTTP Worker</name>
     <groupId>io.zeebe</groupId>
     <artifactId>zeebe-http-worker</artifactId>
-    <version>1.1.1-SNAPSHOT</version>
+    <version>1.2.0</version>
     <packaging>jar</packaging>
 
     <parent>
