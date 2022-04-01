@@ -1,10 +1,10 @@
 package io.zeebe.http.variables;
 
 import io.zeebe.http.ZeebeHttpWorkerConfig;
-import org.junit.Before;
-import org.junit.Test;
 
 import java.util.Map;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -17,7 +17,7 @@ public class LocalVariablesProviderTest {
   private ZeebeHttpWorkerConfig config;
   private EnvironmentVariablesProvider provider;
 
-  @Before
+  @BeforeEach
   public void setUp() {
     config = mock(ZeebeHttpWorkerConfig.class);
 

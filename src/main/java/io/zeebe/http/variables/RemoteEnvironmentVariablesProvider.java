@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import javax.annotation.PostConstruct;
 
 /**
  * Helper to load environment variables from a configured URL as JSON map.
@@ -46,8 +47,6 @@ public class RemoteEnvironmentVariablesProvider implements EnvironmentVariablesP
 
   protected RemoteEnvironmentVariablesProvider(ZeebeHttpWorkerConfig config) {
     this.config = config;
-    // Make sure that variable URL is already checked during worker startup
-    getVariables();
   }
 
   public Map<String, String> getVariables() {
