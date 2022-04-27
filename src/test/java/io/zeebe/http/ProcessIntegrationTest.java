@@ -379,22 +379,30 @@ public class ProcessIntegrationTest {
                     .zeebeTaskHeader("method", "POST")
                     .zeebeTaskHeader("body", "{\"jobKey\":\"{{jobKey}}\"}"));
 
-    Awaitility.await().ignoreExceptions().untilAsserted(() -> {
-          final var recorderJob = StreamFilter.jobRecords(
-                  RecordStream.of(zeebeTestEngine.getRecordStreamSource()))
-              .withIntent(JobIntent.CREATED)
-              .stream().filter(
-                  r -> r.getValue().getProcessInstanceKey() == processInstance.getProcessInstanceKey())
-              .findFirst()
-              .orElseThrow();
+    Awaitility.await().ignoreExceptions().untilAsserted(() ->
+        Assertions.assertThat(StreamFilter.jobRecords(
+                RecordStream.of(zeebeTestEngine.getRecordStreamSource()))
+            .withIntent(JobIntent.CREATED)
+            .stream().filter(
+                r -> r.getValue().getProcessInstanceKey()
+                    == processInstance.getProcessInstanceKey())
+            .findFirst()).isPresent()
+    );
 
-          // simulate an async callback
-          client.newCompleteCommand(recorderJob.getKey()).send().join();
+    final var recorderJob = StreamFilter.jobRecords(
+            RecordStream.of(zeebeTestEngine.getRecordStreamSource()))
+        .withIntent(JobIntent.CREATED)
+        .stream().filter(
+            r -> r.getValue().getProcessInstanceKey() == processInstance.getProcessInstanceKey())
+        .findFirst()
+        .orElseThrow();
 
-      verify(
-          postRequestedFor(urlEqualTo("/api"))
-              .withRequestBody(equalToJson("{\"jobKey\":\"" + recorderJob.getKey() + "\"}")));
-    });
+    Awaitility.await().untilAsserted(() -> verify(
+        postRequestedFor(urlEqualTo("/api"))
+            .withRequestBody(equalToJson("{\"jobKey\":\"" + recorderJob.getKey() + "\"}"))));
+
+    // simulate an async callback
+    client.newCompleteCommand(recorderJob.getKey()).send().join();
 
     ZeebeTestThreadSupport.waitForProcessInstanceCompleted(processInstance);
 
@@ -476,7 +484,8 @@ public class ProcessIntegrationTest {
                   r -> r.getValue().getProcessInstanceKey() == processInstance.getProcessInstanceKey())
               .findFirst().orElseThrow();
 
-      Assertions.assertThat(recorderJob.getValue().getErrorCode()).isNotNull().isEqualTo("some-code");
+      Assertions.assertThat(recorderJob.getValue().getErrorCode()).isNotNull()
+          .isEqualTo("some-code");
       Assertions.assertThat(recorderJob.getValue().getErrorMessage()).isNotNull()
           .isEqualTo("some message");
     });
