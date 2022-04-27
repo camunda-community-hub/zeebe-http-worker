@@ -14,47 +14,58 @@ import static com.github.tomakehurst.wiremock.client.WireMock.putRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlMatching;
-import static org.assertj.core.api.Assertions.assertThat;
+import static com.github.tomakehurst.wiremock.client.WireMock.verify;
 
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
+import com.github.tomakehurst.wiremock.junit5.WireMockTest;
 import com.github.tomakehurst.wiremock.stubbing.Scenario;
+import io.camunda.zeebe.client.ZeebeClient;
 import io.camunda.zeebe.client.api.response.ProcessInstanceEvent;
 import io.camunda.zeebe.model.bpmn.Bpmn;
 import io.camunda.zeebe.model.bpmn.builder.ServiceTaskBuilder;
+import io.camunda.zeebe.process.test.api.RecordStreamSource;
+import io.camunda.zeebe.process.test.api.ZeebeTestEngine;
+import io.camunda.zeebe.process.test.assertions.BpmnAssert;
+import io.camunda.zeebe.process.test.extension.testcontainer.ZeebeProcessTest;
+import io.camunda.zeebe.process.test.filters.RecordStream;
+import io.camunda.zeebe.process.test.filters.StreamFilter;
 import io.camunda.zeebe.protocol.record.intent.JobIntent;
-import io.camunda.zeebe.test.ZeebeTestRule;
-import io.camunda.zeebe.test.util.record.RecordingExporter;
+import io.camunda.zeebe.spring.test.ZeebeSpringTest;
+import io.camunda.zeebe.spring.test.ZeebeTestThreadSupport;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Consumer;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.ClassRule;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.assertj.core.api.Assertions;
+import org.awaitility.Awaitility;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.junit4.SpringRunner;
 
-@RunWith(SpringRunner.class)
+@WireMockTest(httpPort = 8089)
 @SpringBootTest(
     properties = {
-      "ENV_VARS_URL=http://localhost:8089/config",
-      "ENV_VARS_RELOAD_RATE=0",
-      "ENV_VARS_M2M_BASE_URL:http://localhost:8089/token",
-      "ENV_VARS_M2M_CLIENT_ID:someClientId",
-      "ENV_VARS_M2M_CLIENT_SECRET:someSecret",
-      "ENV_VARS_M2M_AUDIENCE:someAudience"
+        "ENV_VARS_URL=http://localhost:8089/config",
+        "ENV_VARS_RELOAD_RATE=0",
+        "ENV_VARS_M2M_BASE_URL:http://localhost:8089/token",
+        "ENV_VARS_M2M_CLIENT_ID:someClientId",
+        "ENV_VARS_M2M_CLIENT_SECRET:someSecret",
+        "ENV_VARS_M2M_AUDIENCE:someAudience"
     })
+@ZeebeSpringTest
 public class ProcessIntegrationTest {
 
-  @ClassRule public static final ZeebeTestRule TEST_RULE = new ZeebeTestRule();
+  @Autowired
+  private ZeebeClient client;
 
-  @ClassRule public static WireMockRule WIRE_MOCK_RULE = new WireMockRule(8089);
+  @Autowired
+  private ZeebeTestEngine zeebeTestEngine;
 
-  @BeforeClass
-  public static void init() {
+  @BeforeEach
+  public void configureApiMock(WireMockRuntimeInfo wmRuntimeInfo) {
     stubFor(
         get(urlEqualTo("/config"))
             .willReturn(aResponse().withHeader("Content-Type", "application/json").withBody("[]")));
@@ -66,18 +77,10 @@ public class ProcessIntegrationTest {
                     .withBody(
                         "{ \"token_type\": \"Bearer\", \"access_token\": \"TOKEN_123_42\" }")));
 
-    System.setProperty(
-        "zeebe.client.broker.contactPoint",
-        TEST_RULE.getClient().getConfiguration().getGatewayAddress());
-  }
-
-  @Before
-  public void resetMock() {
-    WIRE_MOCK_RULE.resetRequests();
   }
 
   @Test
-  public void testGetRequest() {
+  public void testGetRequest(WireMockRuntimeInfo wmRuntimeInfo) {
 
     stubFor(
         get(urlEqualTo("/api"))
@@ -88,47 +91,51 @@ public class ProcessIntegrationTest {
         createInstance(
             serviceTask ->
                 serviceTask
-                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
+                    .zeebeTaskHeader("url", wmRuntimeInfo.getHttpBaseUrl() + "/api")
                     .zeebeTaskHeader("method", "GET"),
             Collections.emptyMap());
 
-    ZeebeTestRule.assertThat(processInstance)
-        .isEnded()
-        .hasVariable("statusCode", 200)
-        .hasVariable("body", Map.of("x", 1));
+    ZeebeTestThreadSupport.waitForProcessInstanceCompleted(processInstance);
 
-    WIRE_MOCK_RULE.verify(getRequestedFor(urlEqualTo("/api")));
+    BpmnAssert.assertThat(processInstance)
+        .isCompleted()
+        .hasVariableWithValue("statusCode", 200)
+        .hasVariableWithValue("body", Map.of("x", 1));
+
+    verify(getRequestedFor(urlEqualTo("/api")));
   }
 
   @Test
-  public void testGetAcceptPlainTextResponse() {
+  public void testGetAcceptPlainTextResponse(WireMockRuntimeInfo wmRuntimeInfo) {
 
     stubFor(
         get(urlEqualTo("/api"))
             .willReturn(
                 aResponse().withHeader("Content-Type", "text/plain")
-                .withBody("This is text")));
+                    .withBody("This is text")));
 
     final var processInstance =
         createInstance(
             serviceTask ->
                 serviceTask
-                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
+                    .zeebeTaskHeader("url", wmRuntimeInfo.getHttpBaseUrl() + "/api")
                     .zeebeTaskHeader("method", "GET")
                     .zeebeTaskHeader("accept", "text/plain"),
             Collections.emptyMap());
 
-    ZeebeTestRule.assertThat(processInstance)
-        .isEnded()
-        .hasVariable("statusCode", 200)
-        .hasVariable("body", "This is text");
+    ZeebeTestThreadSupport.waitForProcessInstanceCompleted(processInstance);
 
-    WIRE_MOCK_RULE.verify(getRequestedFor(urlEqualTo("/api"))
+    BpmnAssert.assertThat(processInstance)
+        .isCompleted()
+        .hasVariableWithValue("statusCode", 200)
+        .hasVariableWithValue("body", "This is text");
+
+    verify(getRequestedFor(urlEqualTo("/api"))
         .withHeader("Accept", equalTo("text/plain")));
   }
 
   @Test
-  public void testPostContentTypePlainText() {
+  public void testPostContentTypePlainText(WireMockRuntimeInfo wmRuntimeInfo) {
     stubFor(
         post(urlEqualTo("/api"))
             .willReturn(aResponse().withStatus(200)));
@@ -137,23 +144,25 @@ public class ProcessIntegrationTest {
         createInstance(
             serviceTask ->
                 serviceTask
-                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
+                    .zeebeTaskHeader("url", wmRuntimeInfo.getHttpBaseUrl() + "/api")
                     .zeebeTaskHeader("method", "POST")
                     .zeebeTaskHeader("contentType", "text/plain"),
             Map.of("body", "This is text"));
 
-    ZeebeTestRule.assertThat(processInstance)
-        .isEnded()
-        .hasVariable("statusCode", 200);
+    ZeebeTestThreadSupport.waitForProcessInstanceCompleted(processInstance);
 
-    WIRE_MOCK_RULE.verify(
+    BpmnAssert.assertThat(processInstance)
+        .isCompleted()
+        .hasVariableWithValue("statusCode", 200);
+
+    verify(
         postRequestedFor(urlEqualTo("/api"))
             .withHeader("Content-Type", equalTo("text/plain"))
             .withRequestBody(equalTo("This is text")));
   }
 
   @Test
-  public void testPostRequest() {
+  public void testPostRequest(WireMockRuntimeInfo wmRuntimeInfo) {
 
     stubFor(post(urlEqualTo("/api")).willReturn(aResponse().withStatus(201)));
 
@@ -161,20 +170,22 @@ public class ProcessIntegrationTest {
         createInstance(
             serviceTask ->
                 serviceTask
-                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
+                    .zeebeTaskHeader("url", wmRuntimeInfo.getHttpBaseUrl() + "/api")
                     .zeebeTaskHeader("method", "POST"),
             Map.of("body", Map.of("x", 1)));
 
-    ZeebeTestRule.assertThat(processInstance).isEnded().hasVariable("statusCode", 201);
+    ZeebeTestThreadSupport.waitForProcessInstanceCompleted(processInstance);
 
-    WIRE_MOCK_RULE.verify(
+    BpmnAssert.assertThat(processInstance).isCompleted().hasVariableWithValue("statusCode", 201);
+
+    verify(
         postRequestedFor(urlEqualTo("/api"))
             .withHeader("Content-Type", equalTo("application/json"))
             .withRequestBody(equalToJson("{\"x\":1}")));
   }
 
   @Test
-  public void testPutRequest() {
+  public void testPutRequest(WireMockRuntimeInfo wmRuntimeInfo) {
 
     stubFor(put(urlEqualTo("/api")).willReturn(aResponse().withStatus(200)));
 
@@ -182,20 +193,22 @@ public class ProcessIntegrationTest {
         createInstance(
             serviceTask ->
                 serviceTask
-                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
+                    .zeebeTaskHeader("url", wmRuntimeInfo.getHttpBaseUrl() + "/api")
                     .zeebeTaskHeader("method", "PUT"),
             Map.of("body", Map.of("x", 1)));
 
-    ZeebeTestRule.assertThat(processInstance).isEnded().hasVariable("statusCode", 200);
+    ZeebeTestThreadSupport.waitForProcessInstanceCompleted(processInstance);
 
-    WIRE_MOCK_RULE.verify(
+    BpmnAssert.assertThat(processInstance).isCompleted().hasVariableWithValue("statusCode", 200);
+
+    verify(
         putRequestedFor(urlEqualTo("/api"))
             .withHeader("Content-Type", equalTo("application/json"))
             .withRequestBody(equalToJson("{\"x\":1}")));
   }
 
   @Test
-  public void testHeaderNamesCanBeUpperAsWell() {
+  public void testHeaderNamesCanBeUpperAsWell(WireMockRuntimeInfo wmRuntimeInfo) {
 
     stubFor(put(urlEqualTo("/api")).willReturn(aResponse().withStatus(200)));
 
@@ -203,16 +216,18 @@ public class ProcessIntegrationTest {
         createInstance(
             serviceTask ->
                 serviceTask
-                    .zeebeTaskHeader("URL", WIRE_MOCK_RULE.baseUrl() + "/api")
+                    .zeebeTaskHeader("URL", wmRuntimeInfo.getHttpBaseUrl() + "/api")
                     .zeebeTaskHeader("METHOD", "PUT")
                     .zeebeTaskHeader("ACCEPT", "text/plain")
                     .zeebeTaskHeader("CONTENTTYPE", "application/json")
                     .zeebeTaskHeader("AUTHORIZATION", "secret"),
             Map.of("body", Map.of("x", 1)));
 
-    ZeebeTestRule.assertThat(processInstance).isEnded().hasVariable("statusCode", 200);
+    ZeebeTestThreadSupport.waitForProcessInstanceCompleted(processInstance);
 
-    WIRE_MOCK_RULE.verify(
+    BpmnAssert.assertThat(processInstance).isCompleted().hasVariableWithValue("statusCode", 200);
+
+    verify(
         putRequestedFor(urlEqualTo("/api"))
             .withHeader("Content-Type", equalTo("application/json"))
             .withHeader("Authorization", equalTo("secret"))
@@ -221,7 +236,7 @@ public class ProcessIntegrationTest {
   }
 
   @Test
-  public void testDeleteRequest() {
+  public void testDeleteRequest(WireMockRuntimeInfo wmRuntimeInfo) {
 
     stubFor(delete(urlEqualTo("/api")).willReturn(aResponse().withStatus(200)));
 
@@ -229,17 +244,19 @@ public class ProcessIntegrationTest {
         createInstance(
             serviceTask ->
                 serviceTask
-                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
+                    .zeebeTaskHeader("url", wmRuntimeInfo.getHttpBaseUrl() + "/api")
                     .zeebeTaskHeader("method", "DELETE"),
             Collections.emptyMap());
 
-    ZeebeTestRule.assertThat(processInstance).isEnded().hasVariable("statusCode", 200);
+    ZeebeTestThreadSupport.waitForProcessInstanceCompleted(processInstance);
 
-    WIRE_MOCK_RULE.verify(deleteRequestedFor(urlEqualTo("/api")));
+    BpmnAssert.assertThat(processInstance).isCompleted().hasVariableWithValue("statusCode", 200);
+
+    verify(deleteRequestedFor(urlEqualTo("/api")));
   }
 
   @Test
-  public void testGetNotFoundResponse() {
+  public void testGetNotFoundResponse(WireMockRuntimeInfo wmRuntimeInfo) {
 
     stubFor(get(urlEqualTo("/api")).willReturn(aResponse().withStatus(404)));
 
@@ -247,17 +264,20 @@ public class ProcessIntegrationTest {
         createInstance(
             serviceTask ->
                 serviceTask
-                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
+                    .zeebeTaskHeader("url", wmRuntimeInfo.getHttpBaseUrl() + "/api")
                     .zeebeTaskHeader("statusCodeFailure", "400,401,402,403,405")
                     .zeebeTaskHeader("statusCodeCompletion", "404")
                     .zeebeTaskHeader("method", "GET"),
             Map.of());
 
-    ZeebeTestRule.assertThat(processInstance).isEnded().hasVariable("statusCode", 404);
+    ZeebeTestThreadSupport.waitForProcessInstanceCompleted(processInstance);
+
+    BpmnAssert.assertThat(processInstance).isCompleted().hasVariableWithValue("statusCode", 404);
   }
 
   @Test
-  public void testGetRequestDelayedResponse() throws InterruptedException {
+  public void testGetRequestDelayedResponse(WireMockRuntimeInfo wmRuntimeInfo)
+      throws InterruptedException {
     long originalResponseTimeout = HttpJobHandler.RESPONSE_TIMEOUT_VALUE;
     try {
       HttpJobHandler.RESPONSE_TIMEOUT_VALUE = 2; // 2 seconds
@@ -286,7 +306,7 @@ public class ProcessIntegrationTest {
           createInstance(
               serviceTask ->
                   serviceTask
-                      .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
+                      .zeebeTaskHeader("url", wmRuntimeInfo.getHttpBaseUrl() + "/api")
                       .zeebeTaskHeader("method", "GET")
                       .zeebeJobRetries("3"),
               Collections.emptyMap());
@@ -294,16 +314,18 @@ public class ProcessIntegrationTest {
       // TODO: Think about a better way of doing this :-)
       Thread.sleep(3 * 1000);
 
-      ZeebeTestRule.assertThat(processInstance).isEnded();
+      ZeebeTestThreadSupport.waitForProcessInstanceCompleted(processInstance);
 
-      WIRE_MOCK_RULE.verify(2, getRequestedFor(urlEqualTo("/api")));
+      BpmnAssert.assertThat(processInstance).isCompleted();
+
+      verify(2, getRequestedFor(urlEqualTo("/api")));
     } finally {
       HttpJobHandler.RESPONSE_TIMEOUT_VALUE = originalResponseTimeout;
     }
   }
 
   @Test
-  public void testAuthorizationHeader() {
+  public void testAuthorizationHeader(WireMockRuntimeInfo wmRuntimeInfo) {
 
     stubFor(get(urlEqualTo("/api")).willReturn(aResponse()));
 
@@ -311,18 +333,20 @@ public class ProcessIntegrationTest {
         createInstance(
             serviceTask ->
                 serviceTask
-                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
+                    .zeebeTaskHeader("url", wmRuntimeInfo.getHttpBaseUrl() + "/api")
                     .zeebeTaskHeader("method", "GET"),
             Map.of("authorization", "token 123"));
 
-    ZeebeTestRule.assertThat(processInstance).isEnded().hasVariable("statusCode", 200);
+    ZeebeTestThreadSupport.waitForProcessInstanceCompleted(processInstance);
 
-    WIRE_MOCK_RULE.verify(
+    BpmnAssert.assertThat(processInstance).isCompleted().hasVariableWithValue("statusCode", 200);
+
+    verify(
         getRequestedFor(urlEqualTo("/api")).withHeader("Authorization", equalTo("token 123")));
   }
 
   @Test
-  public void testCustomHeader() {
+  public void testCustomHeader(WireMockRuntimeInfo wmRuntimeInfo) {
 
     stubFor(get(urlEqualTo("/api")).willReturn(aResponse()));
 
@@ -330,84 +354,111 @@ public class ProcessIntegrationTest {
         createInstance(
             serviceTask ->
                 serviceTask
-                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
+                    .zeebeTaskHeader("url", wmRuntimeInfo.getHttpBaseUrl() + "/api")
                     .zeebeTaskHeader("method", "GET"),
             Map.of("header-X-API-Key", "top-secret"));
 
-    ZeebeTestRule.assertThat(processInstance).isEnded().hasVariable("statusCode", 200);
+    ZeebeTestThreadSupport.waitForProcessInstanceCompleted(processInstance);
 
-    WIRE_MOCK_RULE.verify(
+    BpmnAssert.assertThat(processInstance).isCompleted().hasVariableWithValue("statusCode", 200);
+
+    verify(
         getRequestedFor(urlEqualTo("/api")).withHeader("X-API-Key", equalTo("top-secret")));
   }
 
   @Test
-  public void shouldExposeJobKeyIfStatusCode202() {
+  public void shouldExposeJobKeyIfStatusCode202(WireMockRuntimeInfo wmRuntimeInfo) {
     stubFor(post(urlEqualTo("/api")).willReturn(aResponse().withStatus(202)));
 
     final var processInstance =
         createInstance(
             serviceTask ->
                 serviceTask
-                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
+                    .zeebeTaskHeader("url", wmRuntimeInfo.getHttpBaseUrl() + "/api")
                     .zeebeTaskHeader("statusCodeCompletion", "200,201,203,204,205,206") // NO 202!!
                     .zeebeTaskHeader("method", "POST")
                     .zeebeTaskHeader("body", "{\"jobKey\":\"{{jobKey}}\"}"));
 
-    final var recorderJob =
-        RecordingExporter.jobRecords(JobIntent.CREATED)
-            .withProcessInstanceKey(processInstance.getProcessInstanceKey())
-            .getFirst();
+    Awaitility.await().ignoreExceptions().untilAsserted(() ->
+        Assertions.assertThat(StreamFilter.jobRecords(
+                RecordStream.of(zeebeTestEngine.getRecordStreamSource()))
+            .withIntent(JobIntent.CREATED)
+            .stream().filter(
+                r -> r.getValue().getProcessInstanceKey()
+                    == processInstance.getProcessInstanceKey())
+            .findFirst()).isPresent()
+    );
+
+    final var recorderJob = StreamFilter.jobRecords(
+            RecordStream.of(zeebeTestEngine.getRecordStreamSource()))
+        .withIntent(JobIntent.CREATED)
+        .stream().filter(
+            r -> r.getValue().getProcessInstanceKey() == processInstance.getProcessInstanceKey())
+        .findFirst()
+        .orElseThrow();
+
+    Awaitility.await().untilAsserted(() -> verify(
+        postRequestedFor(urlEqualTo("/api"))
+            .withRequestBody(equalToJson("{\"jobKey\":\"" + recorderJob.getKey() + "\"}"))));
 
     // simulate an async callback
-    TEST_RULE.getClient().newCompleteCommand(recorderJob.getKey()).send().join();
+    client.newCompleteCommand(recorderJob.getKey()).send().join();
 
-    ZeebeTestRule.assertThat(processInstance).isEnded();
+    ZeebeTestThreadSupport.waitForProcessInstanceCompleted(processInstance);
 
-    WIRE_MOCK_RULE.verify(
-        postRequestedFor(urlEqualTo("/api"))
-            .withRequestBody(equalToJson("{\"jobKey\":\"" + recorderJob.getKey() + "\"}")));
+    BpmnAssert.assertThat(processInstance).isCompleted();
   }
 
   @Test
-  public void failOnHttpStatus400() {
+  public void failOnHttpStatus400(WireMockRuntimeInfo wmRuntimeInfo) {
     stubFor(post(urlEqualTo("/api")).willReturn(aResponse().withStatus(400)));
 
     final var processInstance =
         createInstance(
             serviceTask ->
                 serviceTask
-                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
+                    .zeebeTaskHeader("url", wmRuntimeInfo.getHttpBaseUrl() + "/api")
                     .zeebeTaskHeader("method", "POST"));
 
-    final var recorderJob =
-        RecordingExporter.jobRecords(JobIntent.FAILED)
-            .withProcessInstanceKey(processInstance.getProcessInstanceKey())
-            .getFirst();
+    Awaitility.await().ignoreExceptions().untilAsserted(() -> {
+      final var recorderJob =
+          StreamFilter.jobRecords(RecordStream.of(zeebeTestEngine.getRecordStreamSource()))
+              .withIntent(JobIntent.FAILED)
+              .stream().filter(
+                  r -> r.getValue().getProcessInstanceKey() == processInstance.getProcessInstanceKey())
+              .findFirst().orElseThrow();
 
-    assertThat(recorderJob.getValue().getErrorMessage()).isNotNull().contains("failed with 400");
+      Assertions.assertThat(recorderJob.getValue().getErrorMessage()).isNotNull()
+          .contains("failed with 400");
+    });
   }
 
   @Test
-  public void failOnHttpStatus500() {
+  public void failOnHttpStatus500(WireMockRuntimeInfo wmRuntimeInfo) {
     stubFor(post(urlEqualTo("/api")).willReturn(aResponse().withStatus(500)));
 
     final var processInstance =
         createInstance(
             serviceTask ->
                 serviceTask
-                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
+                    .zeebeTaskHeader("url", wmRuntimeInfo.getHttpBaseUrl() + "/api")
                     .zeebeTaskHeader("method", "POST"));
 
-    final var recorderJob =
-        RecordingExporter.jobRecords(JobIntent.FAILED)
-            .withProcessInstanceKey(processInstance.getProcessInstanceKey())
-            .getFirst();
+    Awaitility.await().ignoreExceptions().untilAsserted(() -> {
+      final var recorderJob =
+          StreamFilter.jobRecords(RecordStream.of(zeebeTestEngine.getRecordStreamSource()))
+              .withIntent(JobIntent.FAILED)
+              .stream().filter(
+                  r -> r.getValue().getProcessInstanceKey() == processInstance.getProcessInstanceKey())
+              .findFirst().orElseThrow();
 
-    assertThat(recorderJob.getValue().getErrorMessage()).isNotNull().contains("failed with 500");
+      Assertions.assertThat(recorderJob.getValue().getErrorMessage()).isNotNull()
+          .contains("failed with 500");
+    });
   }
 
   @Test
-  public void throwErrorCodeWithMessageOnFailure() {
+  public void throwErrorCodeWithMessageOnFailure(WireMockRuntimeInfo wmRuntimeInfo) {
     stubFor(
         post(urlEqualTo("/api"))
             .willReturn(
@@ -420,22 +471,28 @@ public class ProcessIntegrationTest {
         createInstance(
             serviceTask ->
                 serviceTask
-                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
+                    .zeebeTaskHeader("url", wmRuntimeInfo.getHttpBaseUrl() + "/api")
                     .zeebeTaskHeader("errorCodePath", "error.code")
                     .zeebeTaskHeader("errorMessagePath", "error.message")
                     .zeebeTaskHeader("method", "POST"));
 
-    final var recorderJob =
-        RecordingExporter.jobRecords(JobIntent.ERROR_THROWN)
-            .withProcessInstanceKey(processInstance.getProcessInstanceKey())
-            .getFirst();
+    Awaitility.await().ignoreExceptions().untilAsserted(() -> {
+      final var recorderJob =
+          StreamFilter.jobRecords(RecordStream.of(zeebeTestEngine.getRecordStreamSource()))
+              .withIntent(JobIntent.ERROR_THROWN)
+              .stream().filter(
+                  r -> r.getValue().getProcessInstanceKey() == processInstance.getProcessInstanceKey())
+              .findFirst().orElseThrow();
 
-    assertThat(recorderJob.getValue().getErrorCode()).isNotNull().isEqualTo("some-code");
-    assertThat(recorderJob.getValue().getErrorMessage()).isNotNull().isEqualTo("some message");
+      Assertions.assertThat(recorderJob.getValue().getErrorCode()).isNotNull()
+          .isEqualTo("some-code");
+      Assertions.assertThat(recorderJob.getValue().getErrorMessage()).isNotNull()
+          .isEqualTo("some message");
+    });
   }
 
   @Test
-  public void throwErrorCodeWithEmptyMessageOnFailure() {
+  public void throwErrorCodeWithEmptyMessageOnFailure(WireMockRuntimeInfo wmRuntimeInfo) {
     stubFor(
         post(urlEqualTo("/api"))
             .willReturn(
@@ -445,22 +502,28 @@ public class ProcessIntegrationTest {
         createInstance(
             serviceTask ->
                 serviceTask
-                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
+                    .zeebeTaskHeader("url", wmRuntimeInfo.getHttpBaseUrl() + "/api")
                     .zeebeTaskHeader("errorCodePath", "error.code")
                     .zeebeTaskHeader("errorMessagePath", "error.message")
                     .zeebeTaskHeader("method", "POST"));
 
-    final var recorderJob =
-        RecordingExporter.jobRecords(JobIntent.ERROR_THROWN)
-            .withProcessInstanceKey(processInstance.getProcessInstanceKey())
-            .getFirst();
+    Awaitility.await().ignoreExceptions().untilAsserted(() -> {
+      final var recorderJob =
+          StreamFilter.jobRecords(RecordStream.of(zeebeTestEngine.getRecordStreamSource()))
+              .withIntent(JobIntent.ERROR_THROWN)
+              .stream().filter(
+                  r -> r.getValue().getProcessInstanceKey() == processInstance.getProcessInstanceKey())
+              .findFirst().orElseThrow();
 
-    assertThat(recorderJob.getValue().getErrorCode()).isNotNull().isEqualTo("some-code");
-    assertThat(recorderJob.getValue().getErrorMessage()).isNotNull().contains("failed with 400");
+      Assertions.assertThat(recorderJob.getValue().getErrorCode()).isNotNull()
+          .isEqualTo("some-code");
+      Assertions.assertThat(recorderJob.getValue().getErrorMessage()).isNotNull()
+          .contains("failed with 400");
+    });
   }
 
   @Test
-  public void failIfErrorCodeIsNotPresent() {
+  public void failIfErrorCodeIsNotPresent(WireMockRuntimeInfo wmRuntimeInfo) {
     stubFor(
         post(urlEqualTo("/api"))
             .willReturn(
@@ -472,21 +535,26 @@ public class ProcessIntegrationTest {
         createInstance(
             serviceTask ->
                 serviceTask
-                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
+                    .zeebeTaskHeader("url", wmRuntimeInfo.getHttpBaseUrl() + "/api")
                     .zeebeTaskHeader("errorCodePath", "error.code")
                     .zeebeTaskHeader("errorMessagePath", "error.message")
                     .zeebeTaskHeader("method", "POST"));
 
-    final var recorderJob =
-        RecordingExporter.jobRecords(JobIntent.FAILED)
-            .withProcessInstanceKey(processInstance.getProcessInstanceKey())
-            .getFirst();
+    Awaitility.await().ignoreExceptions().untilAsserted(() -> {
+      final var recorderJob =
+          StreamFilter.jobRecords(RecordStream.of(zeebeTestEngine.getRecordStreamSource()))
+              .withIntent(JobIntent.FAILED)
+              .stream().filter(
+                  r -> r.getValue().getProcessInstanceKey() == processInstance.getProcessInstanceKey())
+              .findFirst().orElseThrow();
 
-    assertThat(recorderJob.getValue().getErrorMessage()).isNotNull().contains("some message");
+      Assertions.assertThat(recorderJob.getValue().getErrorMessage()).isNotNull()
+          .contains("some message");
+    });
   }
 
   @Test
-  public void failIfBodyIsNotValidJson() {
+  public void failIfBodyIsNotValidJson(WireMockRuntimeInfo wmRuntimeInfo) {
     stubFor(
         post(urlEqualTo("/api"))
             .willReturn(aResponse().withStatus(400).withBody("{error.code = some code}")));
@@ -495,21 +563,26 @@ public class ProcessIntegrationTest {
         createInstance(
             serviceTask ->
                 serviceTask
-                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
+                    .zeebeTaskHeader("url", wmRuntimeInfo.getHttpBaseUrl() + "/api")
                     .zeebeTaskHeader("errorCodePath", "error.code")
                     .zeebeTaskHeader("errorMessagePath", "error.message")
                     .zeebeTaskHeader("method", "POST"));
 
-    final var recorderJob =
-        RecordingExporter.jobRecords(JobIntent.FAILED)
-            .withProcessInstanceKey(processInstance.getProcessInstanceKey())
-            .getFirst();
+    Awaitility.await().ignoreExceptions().untilAsserted(() -> {
+      final var recorderJob =
+          StreamFilter.jobRecords(RecordStream.of(zeebeTestEngine.getRecordStreamSource()))
+              .withIntent(JobIntent.FAILED)
+              .stream().filter(
+                  r -> r.getValue().getProcessInstanceKey() == processInstance.getProcessInstanceKey())
+              .findFirst().orElseThrow();
 
-    assertThat(recorderJob.getValue().getErrorMessage()).isNotNull().contains("failed with 400");
+      Assertions.assertThat(recorderJob.getValue().getErrorMessage()).isNotNull()
+          .contains("failed with 400");
+    });
   }
 
   @Test
-  public void shouldReplacePlaceholdersWithVariables() {
+  public void shouldReplacePlaceholdersWithVariables(WireMockRuntimeInfo wmRuntimeInfo) {
 
     stubFor(post(urlMatching("/api/.*")).willReturn(aResponse().withStatus(201)));
 
@@ -517,39 +590,43 @@ public class ProcessIntegrationTest {
         createInstance(
             serviceTask ->
                 serviceTask
-                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api/{{x}}")
+                    .zeebeTaskHeader("url", wmRuntimeInfo.getHttpBaseUrl() + "/api/{{x}}")
                     .zeebeTaskHeader("method", "POST")
                     .zeebeTaskHeader("body", "{\"y\":{{y}}}"),
             Map.of("x", 1, "y", 2));
 
-    ZeebeTestRule.assertThat(processInstance).isEnded().hasVariable("statusCode", 201);
+    ZeebeTestThreadSupport.waitForProcessInstanceCompleted(processInstance);
 
-    WIRE_MOCK_RULE.verify(
+    BpmnAssert.assertThat(processInstance).isCompleted().hasVariableWithValue("statusCode", 201);
+
+    verify(
         postRequestedFor(urlEqualTo("/api/1"))
             .withHeader("Content-Type", equalTo("application/json"))
             .withRequestBody(equalToJson("{\"y\":2}")));
   }
 
   @Test
-  public void shouldReplaceLegacyPlaceholders() {
+  public void shouldReplaceLegacyPlaceholders(WireMockRuntimeInfo wmRuntimeInfo) {
     stubFor(post(urlMatching("/api/.*")).willReturn(aResponse().withStatus(201)));
 
     final var processInstance =
         createInstance(
             serviceTask ->
                 serviceTask
-                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api/{{x}}")
+                    .zeebeTaskHeader("url", wmRuntimeInfo.getHttpBaseUrl() + "/api/{{x}}")
                     .zeebeTaskHeader("method", "POST")
                     .zeebeTaskHeader("body", "{\"y\":${y}}"),
             Map.of("x", 1, "y", 2));
 
-    ZeebeTestRule.assertThat(processInstance).isEnded().hasVariable("statusCode", 201);
-    WIRE_MOCK_RULE.verify(
+    ZeebeTestThreadSupport.waitForProcessInstanceCompleted(processInstance);
+
+    BpmnAssert.assertThat(processInstance).isCompleted().hasVariableWithValue("statusCode", 201);
+    verify(
         postRequestedFor(urlEqualTo("/api/1")).withRequestBody(equalToJson("{\"y\":2}")));
   }
 
   @Test
-  public void shouldReplacePlaceholdersWithContext() {
+  public void shouldReplacePlaceholdersWithContext(WireMockRuntimeInfo wmRuntimeInfo) {
 
     stubFor(post(urlMatching("/api/.*")).willReturn(aResponse().withStatus(201)));
 
@@ -557,19 +634,23 @@ public class ProcessIntegrationTest {
         createInstance(
             serviceTask ->
                 serviceTask
-                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api/{{jobKey}}")
+                    .zeebeTaskHeader("url", wmRuntimeInfo.getHttpBaseUrl() + "/api/{{jobKey}}")
                     .zeebeTaskHeader("method", "POST")
                     .zeebeTaskHeader("body", "{\"instanceKey\":{{processInstanceKey}}}"),
             Map.of());
 
-    ZeebeTestRule.assertThat(processInstance).isEnded().hasVariable("statusCode", 201);
+    ZeebeTestThreadSupport.waitForProcessInstanceCompleted(processInstance);
+
+    BpmnAssert.assertThat(processInstance).isCompleted().hasVariableWithValue("statusCode", 201);
 
     final var job =
-        RecordingExporter.jobRecords(JobIntent.CREATED)
-            .withProcessInstanceKey(processInstance.getProcessInstanceKey())
-            .getFirst();
+        StreamFilter.jobRecords(RecordStream.of(zeebeTestEngine.getRecordStreamSource()))
+            .withIntent(JobIntent.CREATED)
+            .stream().filter(
+                r -> r.getValue().getProcessInstanceKey() == processInstance.getProcessInstanceKey())
+            .findFirst().orElseThrow();
 
-    WIRE_MOCK_RULE.verify(
+    verify(
         postRequestedFor(urlEqualTo("/api/" + job.getKey()))
             .withHeader("Content-Type", equalTo("application/json"))
             .withRequestBody(
@@ -578,7 +659,8 @@ public class ProcessIntegrationTest {
   }
 
   @Test
-  public void shouldReplacePlaceholdersWithConfigVariablesWithM2MToken() {
+  public void shouldReplacePlaceholdersWithConfigVariablesWithM2MToken(
+      WireMockRuntimeInfo wmRuntimeInfo) {
     //    WIRE_MOCK_RULE.resetAll(); // forget the defaults set in the static initializer for this
     // test
     //    stubFor(post(urlEqualTo("/token")).willReturn(aResponse()
@@ -597,29 +679,32 @@ public class ProcessIntegrationTest {
         createInstance(
             serviceTask ->
                 serviceTask
-                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api/{{x}}")
+                    .zeebeTaskHeader("url", wmRuntimeInfo.getHttpBaseUrl() + "/api/{{x}}")
                     .zeebeTaskHeader("method", "POST")
                     .zeebeTaskHeader("body", "{\"y\":{{y}}}"),
             Map.of());
 
-    ZeebeTestRule.assertThat(processInstance).isEnded().hasVariable("statusCode", 201);
+    ZeebeTestThreadSupport.waitForProcessInstanceCompleted(processInstance);
+
+    BpmnAssert.assertThat(processInstance).isCompleted().hasVariableWithValue("statusCode", 201);
 
     // I can't check if the /token was called here, as the token is typically already cached from
     // other test runs
     // and I can't move this to a seperate test class because of limitations in the test support
     // from zeebe at the moment
     // So I check if the Authorization Header is set correctly instead
-    WIRE_MOCK_RULE.verify(
+    verify(
         getRequestedFor(urlEqualTo("/config"))
             .withHeader("Authorization", equalTo("Bearer TOKEN_123_42")));
-    WIRE_MOCK_RULE.verify(
+    verify(
         postRequestedFor(urlEqualTo("/api/1"))
             .withHeader("Content-Type", equalTo("application/json"))
             .withRequestBody(equalToJson("{\"y\":2}")));
   }
 
   @Test
-  public void shouldReplacePlaceholdersWithConfigVariablesWithM2MTokenRefresh() {
+  public void shouldReplacePlaceholdersWithConfigVariablesWithM2MTokenRefresh(
+      WireMockRuntimeInfo wmRuntimeInfo) {
     // forbidden, which happens because of outdated tokens
     stubFor(
         get(urlMatching("/config"))
@@ -644,14 +729,16 @@ public class ProcessIntegrationTest {
         createInstance(
             serviceTask ->
                 serviceTask
-                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api/{{x}}")
+                    .zeebeTaskHeader("url", wmRuntimeInfo.getHttpBaseUrl() + "/api/{{x}}")
                     .zeebeTaskHeader("method", "POST")
                     .zeebeTaskHeader("body", "{\"y\":{{y}}}"),
             Map.of());
 
-    ZeebeTestRule.assertThat(processInstance).isEnded().hasVariable("statusCode", 201);
+    ZeebeTestThreadSupport.waitForProcessInstanceCompleted(processInstance);
 
-    WIRE_MOCK_RULE.verify(
+    BpmnAssert.assertThat(processInstance).isCompleted().hasVariableWithValue("statusCode", 201);
+
+    verify(
         postRequestedFor(urlEqualTo("/token"))
             .withHeader("Content-Type", equalTo("application/json"))
             .withHeader("Accept", equalTo("application/json"))
@@ -659,7 +746,7 @@ public class ProcessIntegrationTest {
                 equalToJson(
                     "{\"client_id\":\"someClientId\", \"client_secret\": \"someSecret\",  \"audience\": \"someAudience\",  \"grant_type\": \"client_credentials\"}")));
 
-    WIRE_MOCK_RULE.verify(
+    verify(
         postRequestedFor(urlEqualTo("/api/1"))
             .withHeader("Content-Type", equalTo("application/json"))
             .withRequestBody(equalToJson("{\"y\":2}")));
@@ -680,8 +767,7 @@ public class ProcessIntegrationTest {
     taskCustomizer.accept(processBuilder);
     processBuilder.endEvent();
 
-    TEST_RULE
-        .getClient()
+    client
         .newDeployCommand()
         .addProcessModel(processBuilder.done(), "process.bpmn")
         .requestTimeout(Duration.ofSeconds(10))
@@ -689,8 +775,7 @@ public class ProcessIntegrationTest {
         .join();
 
     return
-        TEST_RULE
-            .getClient()
+        client
             .newCreateInstanceCommand()
             .bpmnProcessId("process")
             .latestVersion()
@@ -701,7 +786,7 @@ public class ProcessIntegrationTest {
   }
 
   @Test
-  public void testCustomHeadersCanBeProvided() {
+  public void testCustomHeadersCanBeProvided(WireMockRuntimeInfo wmRuntimeInfo) {
 
     stubFor(put(urlEqualTo("/api")).willReturn(aResponse().withStatus(200)));
 
@@ -709,14 +794,16 @@ public class ProcessIntegrationTest {
         createInstance(
             serviceTask ->
                 serviceTask
-                    .zeebeTaskHeader("url", WIRE_MOCK_RULE.baseUrl() + "/api")
+                    .zeebeTaskHeader("url", wmRuntimeInfo.getHttpBaseUrl() + "/api")
                     .zeebeTaskHeader("method", "PUT")
                     .zeebeTaskHeader("header-x-lower", "case")
                     .zeebeTaskHeader("HEADER-x-upper", "case"));
 
-    ZeebeTestRule.assertThat(processInstance).isEnded().hasVariable("statusCode", 200);
+    ZeebeTestThreadSupport.waitForProcessInstanceCompleted(processInstance);
 
-    WIRE_MOCK_RULE.verify(
+    BpmnAssert.assertThat(processInstance).isCompleted().hasVariableWithValue("statusCode", 200);
+
+    verify(
         putRequestedFor(urlEqualTo("/api"))
             .withHeader("x-lower", equalTo("case"))
             .withHeader("x-upper", equalTo("case")));

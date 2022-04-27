@@ -20,35 +20,29 @@ import io.camunda.zeebe.client.api.worker.JobClient;
 import io.camunda.zeebe.spring.client.EnableZeebeClient;
 import io.camunda.zeebe.spring.client.annotation.ZeebeWorker;
 import java.io.IOException;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.boot.web.servlet.support.SpringBootServletInitializer;
 
 @SpringBootApplication
 @EnableZeebeClient
-public class ZeebeHttpWorkerApplication extends SpringBootServletInitializer {
+public class ZeebeHttpWorkerApplication {
+
+  @Autowired
+  private HttpJobHandler jobHandler;
 
   public static void main(String[] args) {
     SpringApplication.run(ZeebeHttpWorkerApplication.class, args);
-    try {
-      new CountDownLatch(1).await();
-    } catch (InterruptedException e) {
-    }
   }
-  
-  @Autowired
-  private HttpJobHandler jobHandler;
 
   // This code does not limit the variables resolves
   // That means the worker always fetches all variables to support expressions/placeholders
   // as a workaround until https://github.com/zeebe-io/zeebe/issues/3417 is there
   @ZeebeWorker
-  public void handleFooJob(final JobClient client, final ActivatedJob job) throws IOException, InterruptedException, ExecutionException, TimeoutException {
+  public void handleFooJob(final JobClient client, final ActivatedJob job)
+      throws IOException, InterruptedException, ExecutionException, TimeoutException {
     jobHandler.handle(client, job);
-  }  
+  }
 }
