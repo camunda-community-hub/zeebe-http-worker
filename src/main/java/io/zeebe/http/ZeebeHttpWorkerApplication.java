@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.zeebe.http;
 
 import io.camunda.zeebe.client.api.response.ActivatedJob;
@@ -30,19 +31,20 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 @EnableZeebeClient
 public class ZeebeHttpWorkerApplication {
 
-  @Autowired
-  private HttpJobHandler jobHandler;
+	@Autowired
+	private HttpJobHandler jobHandler;
 
-  public static void main(String[] args) {
-    SpringApplication.run(ZeebeHttpWorkerApplication.class, args);
-  }
+	public static void main(String[] args) {
+		SpringApplication.run(ZeebeHttpWorkerApplication.class, args);
+	}
 
-  // This code does not limit the variables resolves
-  // That means the worker always fetches all variables to support expressions/placeholders
-  // as a workaround until https://github.com/zeebe-io/zeebe/issues/3417 is there
-  @ZeebeWorker
-  public void handleFooJob(final JobClient client, final ActivatedJob job)
-      throws IOException, InterruptedException, ExecutionException, TimeoutException {
-    jobHandler.handle(client, job);
-  }
+	// This code does not limit the variables resolves
+	// That means the worker always fetches all variables to support
+	// expressions/placeholders
+	// as a workaround until https://github.com/zeebe-io/zeebe/issues/3417 is there
+	@ZeebeWorker
+	public void handleFooJob(final JobClient client, final ActivatedJob job)
+			throws IOException, InterruptedException, ExecutionException, TimeoutException {
+		jobHandler.handle(client, job);
+	}
 }
