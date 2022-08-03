@@ -261,7 +261,7 @@ public class HttpJobHandler implements JobHandler {
 		}).ifPresent(body -> result.put("body", body));
 
 		return result;
-	}
+  }
 
   private Object bodyToObject(String body) {
     try {
@@ -286,7 +286,7 @@ public class HttpJobHandler implements JobHandler {
 			String jsonString = json.toString();
 			return objectMapper.readValue(jsonString, Object.class);
 		} catch (Exception e) {
-			throw new RuntimeException("Failed to serialize XML: body: " + body);
+			throw new RuntimeException("Failed to serialize XML: " + body);
 		}
-	}
+  }
 }
