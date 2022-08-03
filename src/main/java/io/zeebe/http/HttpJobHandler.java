@@ -37,6 +37,9 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+
+import org.json.JSONObject;
+import org.json.XML;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -240,28 +243,25 @@ public class HttpJobHandler implements JobHandler {
         || (statusCode.startsWith("5") && matchCodePattern.contains("5xx"));
   }
 
-  private Map<String, Object> processResponse(ActivatedJob job,
-      HttpResponse<String> response, HttpRequest request) {
+  private Map<String, Object> processResponse(ActivatedJob job, HttpResponse<String> response, HttpRequest request) {
 
-    final Map<String, Object> result = new java.util.HashMap<>();
-    int statusCode = response.statusCode();
-    result.put("statusCode", statusCode);
+		final Map<String, Object> result = new java.util.HashMap<>();
+		int statusCode = response.statusCode();
+		result.put("statusCode", statusCode);
 
-    Optional.ofNullable(response.body())
-        .filter(body -> !body.isEmpty())
-        .map(body -> {
-          if (request.headers().allValues("Accept").contains("text/plain") &&
-              response.headers().allValues("Content-Type").contains("text/plain")
-          ) {
-            return body;
-          } else {
-            return bodyToObject(body);
-          }
-        })
-        .ifPresent(body -> result.put("body", body));
+		Optional.ofNullable(response.body()).filter(body -> !body.isEmpty()).map(body -> {
+			if (request.headers().allValues("Accept").contains("text/plain")
+					&& response.headers().allValues("Content-Type").contains("text/plain")) {
+				return body;
+			} else if (request.headers().allValues("Accept").contains("application/xml")) {
+				return bodyXmlToJson(body);
+			} else {
+				return bodyToObject(body);
+			}
+		}).ifPresent(body -> result.put("body", body));
 
-    return result;
-  }
+		return result;
+	}
 
   private Object bodyToObject(String body) {
     try {
@@ -279,4 +279,14 @@ public class HttpJobHandler implements JobHandler {
       return Optional.empty();
     }
   }
+  
+  private Object bodyXmlToJson(String body) {
+		try {
+			JSONObject json = XML.toJSONObject((String) body);
+			String jsonString = json.toString();
+			return objectMapper.readValue(jsonString, Object.class);
+		} catch (Exception e) {
+			throw new RuntimeException("Failed to serialize XML: body: " + body);
+		}
+	}
 }
