@@ -253,7 +253,8 @@ public class HttpJobHandler implements JobHandler {
 			if (request.headers().allValues("Accept").contains("text/plain")
 					&& response.headers().allValues("Content-Type").contains("text/plain")) {
 				return body;
-			} else if (request.headers().allValues("Accept").contains("application/xml")) {
+			} else if (request.headers().allValues("Accept").contains("application/xml")
+				  	&& response.headers().allValues("Content-Type").contains("application/xml")) {
 				return bodyXmlToJson(body);
 			} else {
 				return bodyToObject(body);
