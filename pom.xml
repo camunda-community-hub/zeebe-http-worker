@@ -17,7 +17,7 @@
 
     <properties>
         <version.zeebe.spring>8.1.14</version.zeebe.spring>
-        <version.spring.boot>2.7.5</version.spring.boot>
+        <version.spring.boot>3.0.1</version.spring.boot>
 
         <!-- release parent settings -->
         <version.java>17</version.java>
