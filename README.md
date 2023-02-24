@@ -1,13 +1,20 @@
 # zeebe-http-worker
 
 [![](https://img.shields.io/badge/Community%20Extension-An%20open%20source%20community%20maintained%20project-FF4700)](https://github.com/camunda-community-hub/community)
-[![](https://img.shields.io/badge/Lifecycle-Stable-brightgreen)](https://github.com/Camunda-Community-Hub/community/blob/main/extension-lifecycle.md#stable-)
+[![](https://img.shields.io/badge/Lifecycle-Deprecated-yellowgreen)](https://github.com/Camunda-Community-Hub/community/blob/main/extension-lifecycle.md#deprecated-)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 [![Compatible with: Camunda Platform 8](https://img.shields.io/badge/Compatible%20with-Camunda%20Platform%208-0072Ce)](https://github.com/camunda-community-hub/community/blob/main/extension-lifecycle.md#compatiblilty)
-[![](https://img.shields.io/badge/Maintainer%20Wanted-This%20extension%20is%20in%20search%20of%20a%20Maintainer-ff69b4)](https://github.com/camunda-community-hub/community/blob/main/extension-lifecycle.md)
 
 A Zeebe worker to make HTTP calls (e.g. invoking a REST service). It is based on the built-in Java HttpClient.
+
+> **Warning**
+> This community extension is deprecated. You should prefer the official [Camunda REST connector](https://docs.camunda.io/docs/next/components/connectors/out-of-the-box-connectors/rest/). The connector is available in Camunda SaaS and for self-managed. Further resources:
+> - [Documentation](https://docs.camunda.io/docs/next/components/connectors/out-of-the-box-connectors/rest/)
+> - [GitHub repository](https://github.com/camunda/connectors-bundle) 
+> - [Installation guide for self-managed](https://docs.camunda.io/docs/next/self-managed/connectors-deployment/install-and-start/)
+>
+> Thank you to all [contributors](https://github.com/camunda-community-hub/zeebe-http-worker/graphs/contributors) for making it a great extension. :tada:
 
 ## Usage
 
