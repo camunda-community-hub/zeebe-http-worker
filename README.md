@@ -6,15 +6,15 @@
 
 [![Compatible with: Camunda Platform 8](https://img.shields.io/badge/Compatible%20with-Camunda%20Platform%208-0072Ce)](https://github.com/camunda-community-hub/community/blob/main/extension-lifecycle.md#compatiblilty)
 
-A Zeebe worker to make HTTP calls (e.g. invoking a REST service). It is based on the built-in Java HttpClient.
-
-> **Warning**
-> This community extension is deprecated. You should prefer the official [Camunda REST connector](https://docs.camunda.io/docs/next/components/connectors/out-of-the-box-connectors/rest/). The connector is available in Camunda SaaS and for self-managed. Further resources:
+> [!IMPORTANT]
+> This community extension is **deprecated**. You should prefer the official [Camunda REST connector](https://docs.camunda.io/docs/next/components/connectors/out-of-the-box-connectors/rest/). The connector is available in Camunda SaaS and for self-managed. Further resources:
 > - [Documentation](https://docs.camunda.io/docs/next/components/connectors/out-of-the-box-connectors/rest/)
 > - [GitHub repository](https://github.com/camunda/connectors-bundle) 
 > - [Installation guide for self-managed](https://docs.camunda.io/docs/next/self-managed/connectors-deployment/install-and-start/)
 >
 > Thank you to all [contributors](https://github.com/camunda-community-hub/zeebe-http-worker/graphs/contributors) for making it a great extension. :tada:
+
+A Zeebe worker to make HTTP calls (e.g. invoking a REST service). It is based on the built-in Java HttpClient.
 
 ## Usage
 
